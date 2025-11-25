@@ -1,0 +1,9 @@
+{
+  "name": "czc-root",
+  "private": true,
+  "workspaces": ["Backend"],
+  "scripts": {
+    "start": "node Backend/server.js"
+  }
+  ,"engines": { "node": "22.x" }
+}
