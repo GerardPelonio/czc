@@ -1,13 +1,15 @@
-// routes/shop.js
-
-const express = require("express");
+const express = require('express');
 const router = express.Router();
-const ShopController = require("../controllers/ShopController");
+const controller = require('../controllers/ShopController');
+const { authLimiter } = require('../middlewares/authLimit');
 
-router.get("/", ShopController.listItems);
+// List available shop items
+router.get('/api/shop', authLimiter, controller.listItems);
 
-router.post("/redeem", ShopController.redeem);
+// Redeem an item using student coins
+router.post('/api/shop/redeem', authLimiter, controller.redeem);
 
-router.get("/transactions/:userId", ShopController.getTransactions);
+// Get user transactions
+router.get('/api/shop/transactions/:userId', authLimiter, controller.getTransactions);
 
 module.exports = router;

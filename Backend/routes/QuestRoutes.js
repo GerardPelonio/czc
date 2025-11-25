@@ -1,16 +1,15 @@
-// routes/QuestRoutes.js
-const express = require("express");
+const express = require('express');
 const router = express.Router();
-const { updateProgress } = require("../controllers/QuestController");
-const { updateProgressValidator } = require("../validators/QuestValidators");
-const { validationResult } = require("express-validator");
+const controller = require('../controllers/QuestController');
+const { updateProgressValidator } = require('../validators/QuestValidators');
+const { authLimiter } = require('../middlewares/authLimit');
 
-router.post("/progress", updateProgressValidator, (req, res, next) => {
-  const errors = validationResult(req);
-  if (!errors.isEmpty()) {
-    return res.status(400).json({ success: false, errors: errors.array() });
-  }
-  next();
-}, updateProgress);
+// Update Quest Progress
+router.post(
+  '/api/quest/progress',
+  authLimiter,
+  updateProgressValidator,
+  controller.updateProgress
+);
 
 module.exports = router;

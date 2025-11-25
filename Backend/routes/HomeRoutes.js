@@ -1,24 +1,28 @@
-// routes/HomeRoutes.js
-const express = require("express");
+const express = require('express');
 const router = express.Router();
-const HomeController = require("../controllers/HomeController");
-const HomeValidator = require("../validators/HomeValidators");
+const controller = require('../controllers/HomeController');
+const validator = require('../validators/HomeValidators');
+const { authLimiter } = require('../middlewares/authLimit');
 
-router.get("/", (req, res) => {
+// Health check
+router.get('/api/home', (req, res) => {
   res.status(200).json({
     success: true,
-    message: "Home API is working 🚀"
+    message: 'Home API is working 🚀',
   });
 });
 
-router.post("/progress", HomeValidator.validateSaveProgress, HomeController.saveProgress);
-router.get("/progress/:userId/:storyId", HomeValidator.validateGetProgress, HomeController.getProgress);
-router.get("/progress/:userId", HomeValidator.validateGetAllProgress, HomeController.getAllUserProgress);
-router.put("/session", HomeValidator.validateUpdateSession, HomeController.updateSession);
-router.put("/completed", HomeValidator.validateMarkCompleted, HomeController.markCompleted);
-router.delete("/reset/:userId/:storyId", HomeValidator.validateResetProgress, HomeController.resetProgress);
-router.get("/stats/:userId", HomeValidator.validateGetStats, HomeController.getStats);
-router.get("/recent/:userId", HomeValidator.validateGetRecentStories, HomeController.getRecentStories);
-router.get("/completed/:userId", HomeValidator.validateGetCompletedStories, HomeController.getCompletedStories);
+// Reading Progress Routes
+router.post('/api/home/progress', authLimiter, validator.validateSaveProgress, controller.saveProgress);
+router.get('/api/home/progress/:userId/:storyId', authLimiter, validator.validateGetProgress, controller.getProgress);
+router.get('/api/home/progress/:userId', authLimiter, validator.validateGetAllProgress, controller.getAllUserProgress);
+router.put('/api/home/session', authLimiter, validator.validateUpdateSession, controller.updateSession);
+router.put('/api/home/completed', authLimiter, validator.validateMarkCompleted, controller.markCompleted);
+router.delete('/api/home/reset/:userId/:storyId', authLimiter, validator.validateResetProgress, controller.resetProgress);
+
+// Statistics & User Dashboard
+router.get('/api/home/stats/:userId', authLimiter, validator.validateGetStats, controller.getStats);
+router.get('/api/home/recent/:userId', authLimiter, validator.validateGetRecentStories, controller.getRecentStories);
+router.get('/api/home/completed/:userId', authLimiter, validator.validateGetCompletedStories, controller.getCompletedStories);
 
 module.exports = router;

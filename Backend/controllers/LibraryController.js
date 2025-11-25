@@ -1,4 +1,3 @@
-// controllers/LibraryController.js — GENRE + PHILIPPINES FINAL EDITION
 const axios = require("axios");
 
 const GEMINI_API_KEY = process.env.GEMINI_API_KEY;
@@ -7,7 +6,9 @@ const GEMINI_URL = "https://generativelanguage.googleapis.com/v1beta/models/gemi
 const pageCountCache = new Map();
 let perfectBooks = [];
 
-// ======================== REAL PAGE COUNTER (5–15 PAGES ONLY) ========================
+// ----------------------------------------------------
+// Get page count (5–15 pages only)
+// ----------------------------------------------------
 async function getPageCount(textUrl, bookId) {
   if (pageCountCache.has(bookId)) return pageCountCache.get(bookId);
 
@@ -26,85 +27,52 @@ async function getPageCount(textUrl, bookId) {
 
     pageCountCache.set(bookId, pages);
     return pages;
-  } catch (err) {
+  } catch {
     const fallback = 7 + (bookId % 8); // 7–14
     pageCountCache.set(bookId, fallback);
     return fallback;
   }
 }
 
-// ======================== LOAD RAW BOOKS — 2025 CERT-FIXED + NO HARDCODE ========================
+// ----------------------------------------------------
+// Load raw books from Gutendex
+// ----------------------------------------------------
 async function loadRawBooks() {
-  // This forces Node.js to ignore expired certs ONLY for gutendex.com
-  const agent = new (require('https').Agent)({
-    rejectUnauthorized: false   // ← This is the magic line that fixes "certificate has expired"
-  });
-
+  const agent = new (require("https").Agent)({ rejectUnauthorized: false });
   const searchTerms = encodeURIComponent("short story OR short stories OR fable OR parable OR one act");
-  
+
   try {
     const [p1, p2] = await Promise.all([
-      axios.get(`https://gutendex.com/books?languages=en&search=${searchTerms}&sort=popular&page=1`, {
-        timeout: 15000,
-        httpsAgent: agent
-      }),
-      axios.get(`https://gutendex.com/books?languages=en&search=${searchTerms}&sort=popular&page=2`, {
-        timeout: 15000,
-        httpsAgent: agent
-      })
+      axios.get(`https://gutendex.com/books?languages=en&search=${searchTerms}&sort=popular&page=1`, { timeout: 15000, httpsAgent: agent }),
+      axios.get(`https://gutendex.com/books?languages=en&search=${searchTerms}&sort=popular&page=2`, { timeout: 15000, httpsAgent: agent })
     ]);
 
     const all = [...(p1.data.results || []), ...(p2.data.results || [])];
     console.log(`Gutendex loaded ${all.length} raw books (cert bypass active)`);
-    
-    return all.filter(book => 
-      book.formats && 
-      (book.formats["text/plain"] || 
-       book.formats["text/plain; charset=us-ascii"] || 
+
+    return all.filter(book =>
+      book.formats &&
+      (book.formats["text/plain"] ||
+       book.formats["text/plain; charset=us-ascii"] ||
        book.formats["text/html"])
     );
-
-  } catch (err) {
-    console.log("Gutendex still unreachable → trying official mirror...");
-    
-    // Second chance: official working mirror (no cert issues)
-    try {
-      const res = await axios.get("https://gutenberg.org/ebooks/search/?query=short+story&languge=en&sort_order=popular", { timeout: 12000 });
-      // If we get here, at least we know internet works
-      console.log("Using fallback strategy — library will rebuild from cache");
-    } catch {}
-    
-    return []; // perfectBooks keeps last good data — students still have books!
+  } catch {
+    console.log("Gutendex unreachable → fallback applied");
+    return [];
   }
 }
 
-// GROK NOW ALSO ASSIGNS GENRE!
+// ----------------------------------------------------
+// Assign genre using Grok
+// ----------------------------------------------------
 async function filterWithGrokBrain(rawBooks) {
   if (rawBooks.length === 0) return [];
 
   const GROK_PROMPT = `
 You are an expert DepEd English teacher in the Philippines.
-
-Pick 70–90 short stories (5–15 pages) that are 100% safe and perfect for Filipino students.
-
-Assign each one:
-- school_level: "Junior High" or "Senior High"
-- genre: exactly one from: Mystery, Horror, Sci-Fi, Humor, Romance, Drama, Adventure, Fantasy
-
-Use these examples to guide your choices:
-
-JUNIOR HIGH → The Gift of the Magi (Romance), The Monkey's Paw (Horror), The Most Dangerous Game (Adventure)
-SENIOR HIGH → The Yellow Wallpaper (Horror), Hills Like White Elephants (Drama), Harrison Bergeron (Sci-Fi)
-
-RULES:
-- Only use IDs below
-- Balance: ~45% Senior High, ~55% Junior High
-- Balance genres too (8–15 books per genre)
-- Return ONLY clean JSON array
-
-Format:
-[{"id": 1952, "level": "Senior High", "genre": "Horror"}, ...]
-
+Pick 70–90 short stories (5–15 pages) safe for Filipino students.
+Assign each: school_level ("Junior High" or "Senior High") and genre (Mystery, Horror, Sci-Fi, Humor, Romance, Drama, Adventure, Fantasy)
+Return ONLY clean JSON array: [{"id": 1952, "level": "Senior High", "genre": "Horror"}, ...]
 Books:
 ${rawBooks.map(b => `${b.id}: "${b.title}" by ${b.authors?.[0]?.name || "Unknown"}`).join("\n")}
 `.trim();
@@ -112,35 +80,28 @@ ${rawBooks.map(b => `${b.id}: "${b.title}" by ${b.authors?.[0]?.name || "Unknown
   try {
     const res = await axios.post(`${GEMINI_URL}?key=${GEMINI_API_KEY}`, {
       contents: [{ role: "user", parts: [{ text: GROK_PROMPT }] }],
-      generationConfig: {
-        temperature: 0.5,
-        maxOutputTokens: 6000,
-        responseMimeType: "application/json",
-      },
+      generationConfig: { temperature: 0.5, maxOutputTokens: 6000, responseMimeType: "application/json" },
     }, { timeout: 40000 });
 
     let text = res.data.candidates?.[0]?.content?.parts?.[0]?.text || "[]";
     text = text.replace(/```json|```/g, "").trim();
-
     let list = JSON.parse(text);
-    const valid = rawBooks.map(b => b.id);
-    return list.filter(x => valid.includes(x.id));
 
-  } catch (err) {
-    // Fallback with manual genre tags (still balanced)
+    const validIds = rawBooks.map(b => b.id);
+    return list.filter(x => validIds.includes(x.id));
+
+  } catch {
     const fallbackGenres = ["Mystery", "Horror", "Sci-Fi", "Humor", "Romance", "Drama", "Adventure", "Fantasy"];
     return rawBooks
       .sort((a, b) => (b.download_count || 0) - (a.download_count || 0))
       .slice(0, 85)
-      .map((b, i) => ({
-        id: b.id,
-        level: i < 38 ? "Senior High" : "Junior High",
-        genre: fallbackGenres[i % 8]
-      }));
+      .map((b, i) => ({ id: b.id, level: i < 38 ? "Senior High" : "Junior High", genre: fallbackGenres[i % 8] }));
   }
 }
 
-// ======================== BUILD FINAL LIBRARY ========================
+// ----------------------------------------------------
+// Build final library
+// ----------------------------------------------------
 async function buildPerfectLibrary() {
   console.log("Building CozyClip Library — Philippine Curriculum + Genres");
   const rawBooks = await loadRawBooks();
@@ -151,10 +112,7 @@ async function buildPerfectLibrary() {
     const b = rawBooks.find(book => book.id === item.id);
     if (!b) continue;
 
-    const txtUrl = Object.values(b.formats || {}).find(v =>
-      typeof v === "string" && (v.includes("text/plain") || v.endsWith(".txt"))
-    ) || `https://www.gutenberg.org/files/${b.id}/${b.id}-0.txt`;
-
+    const txtUrl = Object.values(b.formats || {}).find(v => typeof v === "string" && (v.includes("text/plain") || v.endsWith(".txt"))) || `https://www.gutenberg.org/files/${b.id}/${b.id}-0.txt`;
     const pages = await getPageCount(txtUrl, b.id);
 
     books.push({
@@ -180,9 +138,11 @@ async function buildPerfectLibrary() {
 buildPerfectLibrary();
 setInterval(buildPerfectLibrary, 20 * 60 * 1000);
 
-// ======================== CONTROLLER WITH GENRE SUPPORT ========================
-const LibraryController = {
-  async getStories(req, res) {
+// ----------------------------------------------------
+// Controller function
+// ----------------------------------------------------
+async function getStories(req, res) {
+  try {
     let { limit = 12, level, age, genre } = req.query;
     limit = Math.min(parseInt(limit) || 12, 50);
 
@@ -191,7 +151,6 @@ const LibraryController = {
     }
 
     let pool = [...perfectBooks];
-
     if (level === "junior") pool = pool.filter(b => b.school_level === "Junior High");
     if (level === "senior") pool = pool.filter(b => b.school_level === "Senior High");
     if (age === "12-16") pool = pool.filter(b => b.age_range === "12–16");
@@ -208,14 +167,15 @@ const LibraryController = {
     }
 
     const selected = pool.slice(0, limit);
-
-    res.json({
+    return res.json({
       success: true,
       total: selected.length,
       applied_filters: { level, age, genre },
       books: selected
     });
+  } catch (err) {
+    return res.status(500).json({ success: false, message: err.message || "Failed to fetch stories" });
   }
-};
+}
 
-module.exports = LibraryController;
+module.exports = { getStories };

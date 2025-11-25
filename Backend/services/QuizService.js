@@ -4,6 +4,12 @@ const QuizModel = require("../models/QuizModel");
 const GEMINI_API_KEY = process.env.GEMINI_API_KEY;
 const GEMINI_URL = "https://generativelanguage.googleapis.com/v1beta/models/gemini-2.0-flash:generateContent";
 
+const err = (msg, status = 400) => {
+  const e = new Error(msg);
+  e.status = status;
+  throw e;
+};
+
 function buildTrueFalsePrompt(title, content) {
   return `
 You are a literature teacher creating a comprehension quiz for "${title}".
@@ -25,63 +31,78 @@ Output JSON array with:
 }
 
 async function callGemini(prompt) {
-  const resp = await axios.post(`${GEMINI_URL}?key=${GEMINI_API_KEY}`, {
-    contents: [{ role: "user", parts: [{ text: prompt }] }],
-    generationConfig: { temperature:0.5, maxOutputTokens:1500, responseMimeType:"application/json" }
-  }, { headers: { "Content-Type":"application/json" }, timeout:30000 });
+  const resp = await axios.post(
+    `${GEMINI_URL}?key=${GEMINI_API_KEY}`,
+    {
+      contents: [{ role: "user", parts: [{ text: prompt }] }],
+      generationConfig: { temperature: 0.5, maxOutputTokens: 1500, responseMimeType: "application/json" }
+    },
+    { headers: { "Content-Type": "application/json" }, timeout: 30000 }
+  );
 
   const raw = resp.data?.candidates?.[0]?.content?.parts?.[0]?.text;
-  if (!raw) throw new Error("AI response missing");
+  if (!raw) throw err("AI response missing");
   return raw.replace(/```json/ig,"").replace(/```/g,"").trim();
 }
 
-module.exports = {
-  async generateQuiz(userId, storyId, storyContent, title) {
-    // Generate 5 True/False questions
-    const tfRaw = await callGemini(buildTrueFalsePrompt(title, storyContent));
-    let tfQuestions = JSON.parse(tfRaw).slice(0,5).map(q => {
-      const questionText = (q.question || "").toString().trim() || "No question";
-      const choices = ["true","false"];
-      const correctAnswer = (q.correctAnswer || "").toString().trim().toLowerCase() === "true" ? "true" : "false";
-      const explanation = (q.explanation || "No explanation").toString().trim();
-      return { question: questionText, choices, correctAnswer, explanation };
-    });
+async function generateQuiz(userId, storyId, storyContent, title) {
+  if (!userId) throw err("userId is required");
+  if (!storyId) throw err("storyId is required");
+  if (!storyContent) throw err("storyContent is required");
+  if (!title) throw err("title is required");
 
-    // Generate 5 Multiple Choice questions
-    const mcRaw = await callGemini(buildMultipleChoicePrompt(title, storyContent));
-    let mcQuestions = JSON.parse(mcRaw).slice(0,5).map(q => {
-      const questionText = (q.question || "").toString().trim() || "No question";
-      let choices = Array.isArray(q.choices) ? q.choices.map(c=>c.toString()) : ["A","B","C","D"];
-      while(choices.length<4) choices.push("None of the above");
-      choices.length = 4;
-      const correctAnswer = (q.correctAnswer || "").toString().trim();
-      const explanation = (q.explanation || "No explanation").toString().trim();
-      return { question: questionText, choices, correctAnswer, explanation };
-    });
+  // Generate True/False
+  const tfRaw = await callGemini(buildTrueFalsePrompt(title, storyContent));
+  const tfQuestions = JSON.parse(tfRaw).slice(0, 5).map(q => ({
+    question: (q.question || "No question").toString().trim(),
+    choices: ["true","false"],
+    correctAnswer: (q.correctAnswer || "false").toString().trim().toLowerCase() === "true" ? "true" : "false",
+    explanation: (q.explanation || "No explanation").toString().trim()
+  }));
 
-    // Combine TF + MC
-    const questions = [...tfQuestions, ...mcQuestions];
-
-    const quizData = {
-      type: "mixed",
-      numQuestions: 10,
-      questions,
-      generatedAt: new Date().toISOString(),
-      title
-    };
-
-    await QuizModel.saveQuiz(userId, storyId, quizData);
-    return quizData;
-  },
-
-  async getQuizForUser(userId, storyId) {
-    const quiz = await QuizModel.getQuiz(userId, storyId);
-    if (!quiz) return null;
+  // Generate Multiple Choice
+  const mcRaw = await callGemini(buildMultipleChoicePrompt(title, storyContent));
+  const mcQuestions = JSON.parse(mcRaw).slice(0, 5).map(q => {
+    let choices = Array.isArray(q.choices) ? q.choices.map(c => c.toString()) : ["A","B","C","D"];
+    while (choices.length < 4) choices.push("None of the above");
+    choices.length = 4;
     return {
-      storyId,
-      type: quiz.type,
-      numQuestions: quiz.numQuestions,
-      questions: quiz.questions.map(q=>({question:q.question, choices:q.choices}))
+      question: (q.question || "No question").toString().trim(),
+      choices,
+      correctAnswer: (q.correctAnswer || "").toString().trim(),
+      explanation: (q.explanation || "No explanation").toString().trim()
     };
-  }
+  });
+
+  const questions = [...tfQuestions, ...mcQuestions];
+  const quizData = {
+    type: "mixed",
+    numQuestions: questions.length,
+    questions,
+    generatedAt: new Date().toISOString(),
+    title
+  };
+
+  await QuizModel.saveQuiz(userId, storyId, quizData);
+  return quizData;
+}
+
+async function getQuizForUser(userId, storyId) {
+  if (!userId) throw err("userId is required");
+  if (!storyId) throw err("storyId is required");
+
+  const quiz = await QuizModel.getQuiz(userId, storyId);
+  if (!quiz) return null;
+
+  return {
+    storyId,
+    type: quiz.type,
+    numQuestions: quiz.numQuestions,
+    questions: quiz.questions.map(q => ({ question: q.question, choices: q.choices }))
+  };
+}
+
+module.exports = {
+  generateQuiz,
+  getQuizForUser,
 };

@@ -1,21 +1,12 @@
-const admin = require("firebase-admin");
+const COLLECTION = 'quizzes';
 
-if (!admin.apps.length) {
-  const serviceAccount = require("../firebaseConfig.json");
-  admin.initializeApp({ credential: admin.credential.cert(serviceAccount) });
-}
-
-const db = admin.firestore();
-db.settings({ ignoreUndefinedProperties: true });
-
-module.exports = {
-  async saveQuiz(userId, storyId, quizData){
-    const docRef = db.collection("quizzes").doc(`${userId}_${storyId}`);
-    await docRef.set(quizData, { merge: true });
-  },
-
-  async getQuiz(userId, storyId){
-    const doc = await db.collection("quizzes").doc(`${userId}_${storyId}`).get();
-    return doc.exists ? doc.data() : null;
-  }
+const quizSchema = {
+  userId: { type: 'string', required: true },
+  storyId: { type: 'string', required: true },
+  answers: { type: 'array', items: { type: 'string' }, default: [] },
+  score: { type: 'number', default: 0 },
+  completedAt: { type: 'timestamp', default: null },
+  updatedAt: { type: 'timestamp', default: null },
 };
+
+module.exports = { COLLECTION, quizSchema };

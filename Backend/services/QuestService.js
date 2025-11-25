@@ -1,10 +1,18 @@
-// services/QuestService.js
-const QuestModel = require("../models/QuestModel");
+const QuestModel = require('../models/QuestModel');
 
-class QuestService {
-  static async updateUserQuestProgress(userId, eventType) {
-    return await QuestModel.updateProgress(userId, eventType);
-  }
+const err = (msg, status = 400) => {
+  const e = new Error(msg);
+  e.status = status;
+  throw e;
+};
+
+async function updateUserQuestProgress(userId, eventType) {
+  if (!userId) throw err('userId is required', 400);
+  if (!eventType) throw err('eventType is required', 400);
+
+  return QuestModel.updateProgress(userId, eventType);
 }
 
-module.exports = QuestService;
+module.exports = {
+  updateUserQuestProgress,
+};

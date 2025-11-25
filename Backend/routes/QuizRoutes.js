@@ -1,10 +1,16 @@
-const express = require("express");
+const express = require('express');
 const router = express.Router();
-const QuizController = require("../controllers/QuizController");
-const { generateQuizValidator, getQuizValidator, submitQuizValidator } = require("../validators/QuizValidators");
+const controller = require('../controllers/QuizController');
+const { authLimiter } = require('../middlewares/authLimit');
+const { generateQuizValidator, getQuizValidator, submitQuizValidator } = require('../validators/QuizValidators');
 
-router.post("/generate", generateQuizValidator, QuizController.generateQuiz);
-router.get("/:storyId", getQuizValidator, QuizController.getQuiz);
-router.post("/submit", submitQuizValidator, QuizController.submitQuiz);
+// Generate a quiz for a story
+router.post('/api/quiz/generate', authLimiter, generateQuizValidator, controller.generateQuiz);
+
+// Get quiz by story ID
+router.get('/api/quiz/:storyId', authLimiter, getQuizValidator, controller.getQuiz);
+
+// Submit quiz answers
+router.post('/api/quiz/submit', authLimiter, submitQuizValidator, controller.submitQuiz);
 
 module.exports = router;

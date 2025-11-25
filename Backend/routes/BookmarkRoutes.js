@@ -1,23 +1,24 @@
-// routes/BookmarkRoutes.js
-const express = require("express");
+const express = require('express');
 const router = express.Router();
-const BookmarkController = require("../controllers/BookmarkController");
-const {
-  addBookmarkValidator,
-  getBookmarksValidator,
-  deleteBookmarkValidator
-} = require("../validators/BookmarkValidators");
+const controller = require('../controllers/BookmarkController');
+const { 
+  addBookmarkValidator, 
+  getBookmarksValidator, 
+  deleteBookmarkValidator 
+} = require('../validators/BookmarkValidators');
+const { authLimiter } = require('../middlewares/authLimit');
 
 // Health check
-router.get("/", (req, res) => {
+router.get('/api/bookmark', (req, res) => {
   res.status(200).json({
     success: true,
-    message: "Bookmark API is working",
+    message: 'Bookmark API is working',
   });
 });
 
-router.post("/", addBookmarkValidator, BookmarkController.addBookmark);
-router.get("/all", getBookmarksValidator, BookmarkController.getBookmarks);
-router.delete("/:bookmarkId", deleteBookmarkValidator, BookmarkController.deleteBookmark);
+// Bookmark Routes
+router.post('/api/bookmark', authLimiter, addBookmarkValidator, controller.addBookmark);
+router.get('/api/bookmark/all', authLimiter, getBookmarksValidator, controller.getBookmarks);
+router.delete('/api/bookmark/:bookmarkId', authLimiter, deleteBookmarkValidator, controller.deleteBookmark);
 
 module.exports = router;

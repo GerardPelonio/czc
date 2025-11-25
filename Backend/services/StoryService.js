@@ -1,29 +1,51 @@
-// services/StoryService.js
-const StoryModel = require("../models/StoryModel");
+// services/BookmarkService.js
+const BookmarkModel = require("../models/BookmarkModel");
+
+const err = (msg, status = 400) => {
+  const e = new Error(msg);
+  e.status = status;
+  throw e;
+};
 
 /**
- * Fetch a single story by ID
+ * Add or update a bookmark (auto-updates if exists)
+ * @param {string} userId
+ * @param {string} bookId
+ * @param {string} bookTitle
+ * @param {number} chapter
  */
-async function getStoryById(storyId) {
-  return StoryModel.getStoryById(storyId);
+async function addOrUpdateBookmark(userId, bookId, bookTitle, chapter = 1) {
+  if (!userId) throw err("userId is required");
+  if (!bookId) throw err("bookId is required");
+  if (!bookTitle) throw err("bookTitle is required");
+
+  return BookmarkModel.saveBookmark(userId, bookId, bookTitle, chapter);
 }
 
 /**
- * Save or update user reading progress
+ * Get all bookmarks for a user
+ * @param {string} userId
  */
-async function saveProgress(userId, storyId, progressData) {
-  return StoryModel.saveProgress(userId, storyId, progressData);
+async function getBookmarksByUser(userId) {
+  if (!userId) throw err("userId is required");
+  return BookmarkModel.getBookmarksByUser(userId);
 }
 
 /**
- * Get a user's reading progress for a specific story
+ * Delete a bookmark
+ * @param {string} bookmarkId
+ * @param {string} userId
  */
-async function getProgress(userId, storyId) {
-  return StoryModel.getProgress(userId, storyId);
+async function removeBookmark(bookmarkId, userId) {
+  if (!bookmarkId) throw err("bookmarkId is required");
+  if (!userId) throw err("userId is required");
+
+  await BookmarkModel.deleteBookmark(bookmarkId, userId);
+  return true;
 }
 
 module.exports = {
-  getStoryById,
-  saveProgress,
-  getProgress,
+  addOrUpdateBookmark,
+  getBookmarksByUser,
+  removeBookmark,
 };

@@ -1,39 +1,35 @@
-// services/BookmarkService.js
-const BookmarkModel = require("../models/BookmarkModel");
+const firebase = require('firebase-admin');
+const BookmarkModel = require('../models/BookmarkModel');
 
-class BookmarkService {
-  // Add or update bookmark (auto-updates if exists)
-  static async addOrUpdateBookmark(userId, bookId, bookTitle, chapter = 1) {
-    if (!userId || !bookId || !bookTitle) {
-      throw new Error("userId, bookId, and bookTitle are required");
-    }
+const err = (msg, status = 400) => { 
+  const e = new Error(msg); 
+  e.status = status; 
+  throw e; 
+};
 
-    const bookmark = await BookmarkModel.saveBookmark(
-      userId,
-      bookId,
-      bookTitle,
-      chapter
-    );
+async function addOrUpdateBookmark(userId, bookId, bookTitle, chapter = 1) {
+  if (!userId || !bookId || !bookTitle) throw err('userId, bookId, and bookTitle are required', 400);
 
-    return bookmark;
-  }
-
-  // Get all bookmarks for user
-  static async getBookmarksByUser(userId) {
-    if (!userId) throw new Error("userId required");
-
-    return await BookmarkModel.getBookmarksByUser(userId);
-  }
-
-  // Delete bookmark
-  static async removeBookmark(bookmarkId, userId) {
-    if (!bookmarkId || !userId) {
-      throw new Error("bookmarkId and userId required");
-    }
-
-    await BookmarkModel.deleteBookmark(bookmarkId, userId);
-    return true;
-  }
+  const bookmark = await BookmarkModel.saveBookmark(userId, bookId, bookTitle, chapter);
+  return bookmark;
 }
 
-module.exports = BookmarkService;
+async function getBookmarksByUser(userId) {
+  if (!userId) throw err('userId is required', 400);
+
+  const bookmarks = await BookmarkModel.getBookmarksByUser(userId);
+  return bookmarks;
+}
+
+async function removeBookmark(bookmarkId, userId) {
+  if (!bookmarkId || !userId) throw err('bookmarkId and userId are required', 400);
+
+  await BookmarkModel.deleteBookmark(bookmarkId, userId);
+  return true;
+}
+
+module.exports = {
+  addOrUpdateBookmark,
+  getBookmarksByUser,
+  removeBookmark,
+};
