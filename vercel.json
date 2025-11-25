@@ -4,7 +4,9 @@
     { "src": "Backend/api/**/*.js", "use": "@vercel/node" }
   ],
   "routes": [
-    { "src": "/api/(.*)", "dest": "/Backend/api/$1.js" },
+    { "src": "/api/debug/db", "dest": "/Backend/api/debug/db.js" },
+    { "src": "/api/cron/expiry", "dest": "/Backend/api/cron/expiry.js" },
+    { "src": "/api/(.*)", "dest": "/Backend/api/index.js" },
     { "src": "/(.*)", "dest": "/Backend/api/index.js" }
   ]
 }

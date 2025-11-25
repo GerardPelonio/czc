@@ -14,4 +14,8 @@ if (!admin.apps.length) {
 }
 app.locals.db = admin.firestore();
 
-module.exports = (req, res) => app(req, res);
+module.exports = (req, res) => {
+  // Minimal log to help debug routing during vercel dev builds
+  try { console.log('[api/index] Request:', req.method, req.url); } catch (e) {}
+  return app(req, res);
+};

@@ -1,0 +1,12 @@
+node_modules/
+Backend/node_modules/
+.env
+/.vercel
+Backend/.vercel
+*.log
+package-lock.json
+Backend/package-lock.json
+.DS_Store
+dist/
+build/
+coverage/
