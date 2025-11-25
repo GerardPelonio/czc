@@ -10,3 +10,4 @@ Backend/package-lock.json
 dist/
 build/
 coverage/
+.vercel

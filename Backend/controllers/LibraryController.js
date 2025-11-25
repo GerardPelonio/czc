@@ -6,6 +6,32 @@ const GEMINI_URL = "https://generativelanguage.googleapis.com/v1beta/models/gemi
 const pageCountCache = new Map();
 let perfectBooks = [];
 
+const fs = require('fs');
+const path = require('path');
+const CACHE_PATH = path.join(__dirname, '../data/library-cache.json');
+
+function loadCache() {
+  try {
+    const raw = fs.readFileSync(CACHE_PATH, 'utf8');
+    const arr = JSON.parse(raw);
+    if (Array.isArray(arr) && arr.length > 0) {
+      perfectBooks = arr;
+      console.log(`Loaded library from cache: ${arr.length} books`);
+      return true;
+    }
+  } catch {}
+  return false;
+}
+
+function saveCache(books) {
+  try {
+    fs.writeFileSync(CACHE_PATH, JSON.stringify(books, null, 2), 'utf8');
+    console.log(`Library cached to disk: ${books.length} books`);
+  } catch (err) {
+    console.warn('Failed to cache library:', err.message);
+  }
+}
+
 // ----------------------------------------------------
 // Get page count (5–15 pages only)
 // ----------------------------------------------------
@@ -103,36 +129,45 @@ ${rawBooks.map(b => `${b.id}: "${b.title}" by ${b.authors?.[0]?.name || "Unknown
 // Build final library
 // ----------------------------------------------------
 async function buildPerfectLibrary() {
-  console.log("Building CozyClip Library — Philippine Curriculum + Genres");
-  const rawBooks = await loadRawBooks();
-  const approved = await filterWithGrokBrain(rawBooks);
+  try {
+    // Try to load from cache first
+    if (loadCache()) return;
 
-  const books = [];
-  for (const item of approved) {
-    const b = rawBooks.find(book => book.id === item.id);
-    if (!b) continue;
+    console.log("Building CozyClip Library — Philippine Curriculum + Genres");
+    const rawBooks = await loadRawBooks();
+    const approved = await filterWithGrokBrain(rawBooks);
 
-    const txtUrl = Object.values(b.formats || {}).find(v => typeof v === "string" && (v.includes("text/plain") || v.endsWith(".txt"))) || `https://www.gutenberg.org/files/${b.id}/${b.id}-0.txt`;
-    const pages = await getPageCount(txtUrl, b.id);
+    const books = [];
+    for (const item of approved) {
+      const b = rawBooks.find(book => book.id === item.id);
+      if (!b) continue;
 
-    books.push({
-      id: `GB${b.id}`,
-      title: (b.title || "Story").split(/ by |,|\(/i)[0].trim(),
-      author: b.authors?.[0]?.name || "Unknown Author",
-      cover_url: b.formats["image/jpeg"] || `https://www.gutenberg.org/cache/epub/${b.id}/pg${b.id}.cover.medium.jpg`,
-      source_url: txtUrl,
-      school_level: item.level.includes("Senior") ? "Senior High" : "Junior High",
-      grade_range: item.level.includes("Senior") ? "11–12" : "7–10",
-      age_range: item.level.includes("Senior") ? "16–18" : "12–16",
-      genre: item.genre || "Drama",
-      pages,
-      reading_time: `${Math.round(pages * 2.3)} minutes`
-    });
+      const txtUrl = Object.values(b.formats || {}).find(v => typeof v === "string" && (v.includes("text/plain") || v.endsWith(".txt"))) || `https://www.gutenberg.org/files/${b.id}/${b.id}-0.txt`;
+      const pages = await getPageCount(txtUrl, b.id);
+
+      books.push({
+        id: `GB${b.id}`,
+        title: (b.title || "Story").split(/ by |,|\(/i)[0].trim(),
+        author: b.authors?.[0]?.name || "Unknown Author",
+        cover_url: b.formats["image/jpeg"] || `https://www.gutenberg.org/cache/epub/${b.id}/pg${b.id}.cover.medium.jpg`,
+        source_url: txtUrl,
+        school_level: item.level.includes("Senior") ? "Senior High" : "Junior High",
+        grade_range: item.level.includes("Senior") ? "11–12" : "7–10",
+        age_range: item.level.includes("Senior") ? "16–18" : "12–16",
+        genre: item.genre || "Drama",
+        pages,
+        reading_time: `${Math.round(pages * 2.3)} minutes`
+      });
+    }
+
+    perfectBooks = books;
+    saveCache(books);
+    const senior = books.filter(b => b.school_level === "Senior High").length;
+    console.log(`LIBRARY READY: ${books.length} books | Senior: ${senior} | Junior: ${books.length - senior}`);
+  } catch (err) {
+    console.error('Error building library:', err);
+    perfectBooks = [];
   }
-
-  perfectBooks = books;
-  const senior = books.filter(b => b.school_level === "Senior High").length;
-  console.log(`LIBRARY READY: ${books.length} books | Senior: ${senior} | Junior: ${books.length - senior}`);
 }
 
 buildPerfectLibrary();
@@ -179,3 +214,14 @@ async function getStories(req, res) {
 }
 
 module.exports = { getStories };
+
+// Status endpoint for library loading
+function getLibraryStatus(req, res) {
+  res.json({
+    ready: perfectBooks.length > 0,
+    count: perfectBooks.length,
+    message: perfectBooks.length > 0 ? 'Library ready' : 'Library loading...'
+  });
+}
+
+module.exports.getLibraryStatus = getLibraryStatus;
