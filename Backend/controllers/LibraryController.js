@@ -16,6 +16,9 @@ const FAST_DEFAULT_PAGES = 8;
 
 
 const CACHE_FILE = path.join(__dirname, '..', 'data', 'perfect-books-cache.json');
+// Treat Vercel / production as "serverless": no long-running background builders,
+// only read from the pre-generated JSON cache or fall back to live quick pool.
+const IS_SERVERLESS = !!process.env.VERCEL || process.env.SERVERLESS || process.env.NODE_ENV === 'production';
 
 function loadCache() {
   // Try multiple candidate paths in case `vercel dev` uses a different CWD
@@ -56,6 +59,8 @@ function loadCache() {
 }
 
 function saveCache(books) {
+  // On Vercel / serverless, filesystem is read-only at runtime.
+  if (IS_SERVERLESS) return;
   try {
     fs.writeFileSync(CACHE_FILE, JSON.stringify(books), 'utf8');
     console.log(`Saved library cache: ${books.length} books`);
@@ -303,18 +308,28 @@ async function buildPerfectLibrary(forceFast = false) {
   runtimeFullCount = !runtimeFastBuild;
 }
 
-// Load any existing cache first so API can respond immediately unless a forced refresh was requested
-const cacheExists = fs.existsSync(CACHE_FILE);
-if (!cacheExists || FORCE_REFRESH) {
-  console.log('No cache or FORCE_REFRESH is enabled — skipping cache load');
-} else {
-  loadCache();
-}
+// Always try to load the pre-generated cache first so API can respond immediately.
+loadCache();
 
-// If FORCE_REFRESH is set, we force a fresh build even if the cache exists; otherwise prefer fast builds if no cache or FAST_BUILD true
-const initialFast = FAST_BUILD || (!cacheExists && !FORCE_REFRESH);
-buildPerfectLibrary(initialFast);
-setInterval(() => buildPerfectLibrary(false), 20 * 60 * 1000);
+// In non-serverless environments (local dev / long-running server), we can
+// still build/refresh the library in the background.
+if (!IS_SERVERLESS) {
+  const cacheExists = fs.existsSync(CACHE_FILE);
+  if (!cacheExists || FORCE_REFRESH) {
+    console.log('No cache or FORCE_REFRESH is enabled — building library from scratch');
+  }
+  // If FORCE_REFRESH is set, we force a fresh build even if the cache exists;
+  // otherwise prefer fast builds if no cache or FAST_BUILD true.
+  const initialFast = FAST_BUILD || (!cacheExists && !FORCE_REFRESH);
+  buildPerfectLibrary(initialFast).catch(e => {
+    console.log('Initial library build failed', e && e.message);
+  });
+  setInterval(() => {
+    buildPerfectLibrary(false).catch(e => {
+      console.log('Periodic library rebuild failed', e && e.message);
+    });
+  }, 20 * 60 * 1000);
+}
 
 // ----------------------------------------------------
 // Controller function

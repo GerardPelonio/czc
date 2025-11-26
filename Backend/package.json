@@ -7,7 +7,8 @@
     "dev": "nodemon server.js",
     "test": "jest",
     "lint": "eslint .",
-    "migrate:quizzes": "node tools/migrate-quizzes.js"
+    "migrate:quizzes": "node tools/migrate-quizzes.js",
+    "generate:library": "node scripts/generate-library.js"
   },
   "dependencies": {
     "@google/generative-ai": "^0.24.1",
