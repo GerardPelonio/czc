@@ -1,11 +1,13 @@
 const firebase = require('firebase-admin');
+const { getDb } = require('../utils/getDb');
 const { COLLECTION } = require('../models/studentModel');
 
 // Show available customization items
 const AVAILABLE_CUSTOM_ITEMS = ['hat_basic','hat_star','bg_forest','bg_space'];
 
 async function createProfile(userId, data = {}) {
-  const db = firebase.firestore();
+  const db = getDb();
+  if (!db) throw new Error('Firestore not initialized (missing credentials or emulator).');
   const ref = db.collection(COLLECTION).doc(userId);
   const payload = {
     studentId: userId,
@@ -32,7 +34,8 @@ async function createProfile(userId, data = {}) {
 
 async function getProfile(userId) {
   if (!userId) return null;
-  const db = firebase.firestore();
+  const db = getDb();
+  if (!db) return null;
   const snap = await db.collection(COLLECTION).doc(userId).get();
   if (!snap.exists) return null;
   const profile = snap.data();
@@ -48,14 +51,16 @@ async function getProfile(userId) {
 }
 
 async function getAllProfiles() {
-  const db = firebase.firestore();
+  const db = getDb();
+  if (!db) throw new Error('Firestore not initialized (missing credentials or emulator).');
   const snap = await db.collection(COLLECTION).get();
   return snap.docs.map(d => d.data());
 }
 
 async function updateProfile(userId, data = {}) {
   if (!userId) throw new Error('Missing userId');
-  const db = firebase.firestore();
+  const db = getDb();
+  if (!db) throw new Error('Firestore not initialized (missing credentials or emulator).');
   const ref = db.collection(COLLECTION).doc(userId);
   await ref.set(data, { merge: true }); 
   const snap = await ref.get();
@@ -64,7 +69,8 @@ async function updateProfile(userId, data = {}) {
 
 async function deleteProfile(userId) {
   if (!userId) throw new Error('Missing userId');
-  const db = firebase.firestore();
+  const db = getDb();
+  if (!db) throw new Error('Firestore not initialized (missing credentials or emulator).');
   await db.collection(COLLECTION).doc(userId).delete();
   return true;
 }

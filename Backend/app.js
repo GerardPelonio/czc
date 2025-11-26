@@ -53,7 +53,65 @@ const limiter = rateLimit({
 // Apply rate limiting to all /api routes (recommended)
 app.use('/api', limiter);
 
-app.use(express.json({ limit: '5mb' }));
+// Use JSON body parser for all routes except webhook routes that require a RAW body.
+// When a route uses `express.raw()` to capture the body (for example to verify a
+// webhook signature) we must avoid running `express.json()` after that — the
+// stream has already been consumed and `express.json()` will throw
+// "stream is not readable". To solve this cleanly we register a small
+// conditional middleware that only applies JSON parsing when the request is
+// *not* targeting a webhook endpoint.
+const jsonParser = express.json({ limit: '5mb' });
+// Small diagnostic middleware to help trace requests during dev.
+// Prints whether the stream is readable and if the body has been set.
+app.use((req, res, next) => {
+  if (process.env.NODE_ENV !== 'production') {
+    try {
+      const readable = !!req.readable;
+      const bodyExists = typeof req.body !== 'undefined';
+      console.debug(`[body-debug] ${req.method} ${req.originalUrl} readable=${readable} bodyExists=${bodyExists}`);
+    } catch (e) {
+      console.debug('[body-debug] failed to check req properties', e && e.message ? e.message : e);
+    }
+  }
+  return next();
+});
+
+app.use((req, res, next) => {
+  // Skip JSON parsing for webhook endpoints that expect a raw body
+  // Adjust this path if you add other raw-body webhook routes
+  if (req.originalUrl && req.originalUrl.startsWith('/api/webhook/')) return next();
+
+  // If a body is already present (previous middleware parsed it), skip JSON parsing.
+  if (typeof req.body !== 'undefined') return next();
+
+  // If the stream is not readable, don't attempt to parse as it will throw a
+  // 'stream not readable' error; log a warning and continue. This is defensive
+  // for environments where a proxy or earlier middleware may have consumed the
+  // stream (e.g., vercel dev). If the route requires a body and it is missing,
+  // controllers/validators should produce a clear validation error.
+  if (!req.readable) {
+    console.warn('[warn] Request stream not readable; skipping express.json parse for', req.method, req.originalUrl);
+    return next();
+  }
+
+  try {
+    return jsonParser(req, res, (err) => {
+      if (err) {
+        // If the body-parser is complaining about unreadable stream, log and skip.
+        if (err && err.type === 'stream.not.readable') {
+          console.warn('[warn] express.json failed due to unreadable stream; skipping parse for', req.method, req.originalUrl);
+          return next();
+        }
+        return next(err);
+      }
+      return next();
+    });
+  } catch (err) {
+    // Defensive catch in case body-parser throws synchronously (rare)
+    console.warn('[warn] Unexpected error during JSON parsing', err && err.message ? err.message : err);
+    return next();
+  }
+});
 
 // Global express-validator error handler
 app.use((req, res, next) => {

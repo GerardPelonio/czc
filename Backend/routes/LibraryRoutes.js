@@ -27,9 +27,6 @@ router.get('/api/library', authLimiter, (req, res) => {
 // Main endpoint — handles filters (level, age, genre, limit)
 router.get('/api/library/stories', authLimiter, controller.getStories);
 
-// Status endpoint for library loading
-router.get('/api/library/status', controller.getLibraryStatus);
-
 // Quick genre shortcuts
 const genres = ["mystery", "horror", "scifi", "humor", "romance", "drama", "adventure", "fantasy"];
 genres.forEach(g => {

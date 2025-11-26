@@ -1,4 +1,5 @@
 const firebase = require('firebase-admin');
+const { getDb } = require('../utils/getDb');
 const { COLLECTION } = require('../models/settingsModel');
 
 const DEFAULTS = {
@@ -21,13 +22,15 @@ const DEFAULTS = {
 
 async function getRef(userId) {
   if (!userId) throw Object.assign(new Error('Missing userId'), { status: 400 });
-  const db = firebase.firestore();
+  const db = getDb();
+  if (!db) throw Object.assign(new Error('Firestore not initialized (missing credentials or emulator).'), { status: 500 });
   return db.collection(COLLECTION).doc(userId); // doc id == userId
 }
 
 async function getSettings(userId) {
   if (!userId) throw Object.assign(new Error('Missing userId'), { status: 400 });
-  const db = firebase.firestore();
+  const db = getDb();
+  if (!db) throw Object.assign(new Error('Firestore not initialized (missing credentials or emulator).'), { status: 500 });
   const ref = db.collection(COLLECTION).doc(userId);
   const snap = await ref.get();
   if (!snap.exists) {
@@ -41,7 +44,8 @@ async function getSettings(userId) {
 
 async function updateSettings(userId, data = {}) {
   if (!userId) throw Object.assign(new Error('Missing userId'), { status: 400 });
-  const db = firebase.firestore();
+  const db = getDb();
+  if (!db) throw Object.assign(new Error('Firestore not initialized (missing credentials or emulator).'), { status: 500 });
   const ref = db.collection(COLLECTION).doc(userId);
   const payload = {
     ...data,
@@ -54,7 +58,8 @@ async function updateSettings(userId, data = {}) {
 
 async function applyDefaults(userId) {
   if (!userId) throw Object.assign(new Error('Missing userId'), { status: 400 });
-  const db = firebase.firestore();
+  const db = getDb();
+  if (!db) throw Object.assign(new Error('Firestore not initialized (missing credentials or emulator).'), { status: 500 });
   const ref = db.collection(COLLECTION).doc(userId);
   await ref.set({ userId, ...DEFAULTS, updatedAt: new Date().toISOString() }, { merge: true });
   const snap = await ref.get();

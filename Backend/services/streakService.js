@@ -1,4 +1,5 @@
 const firebase = require('firebase-admin');
+const { getDb } = require('../utils/getDb');
 const { COLLECTION } = require('../models/streakModel');
 const https = require('https');
 
@@ -14,7 +15,8 @@ function yesterdayKey() {
 }
 
 async function getRef(userId) {
-  const db = firebase.firestore();
+  const db = getDb();
+  if (!db) throw new Error('Firestore not initialized (missing credentials or emulator).');
   return db.collection(COLLECTION).doc(userId);
 }
 
@@ -68,7 +70,7 @@ async function recordReadingSession(userId, sessionIso) {
     currentStreak: current,
     longestStreak: longest,
     badges,
-    updatedAt: firebase.firestore.FieldValue.serverTimestamp()
+    updatedAt: require('../utils/getDb').serverTimestampOrDate()
   };
 
   await ref.set(payload, { merge: true });

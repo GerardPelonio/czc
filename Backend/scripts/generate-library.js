@@ -139,13 +139,13 @@ async function buildAndSave() {
   const senior = books.filter(b => b.school_level === "Senior High").length;
   console.log(`LIBRARY BUILT: ${books.length} books | Senior: ${senior} | Junior: ${books.length - senior}`);
 
-  // SAVE TO FILE
-  const outputPath = path.join(__dirname, "../utils/prebuilt-library.json");
+  // SAVE TO CACHE FILE used by the running server
+  const outputPath = path.join(__dirname, "../data/perfect-books-cache.json");
   fs.mkdirSync(path.dirname(outputPath), { recursive: true });
   fs.writeFileSync(outputPath, JSON.stringify(books, null, 2));
 
-  console.log("prebuilt-library.json saved!");
-  console.log("Now commit this file → your app will be INSTANT on Vercel!");
+  console.log("perfect-books-cache.json saved to Backend/data — your server will use it on startup.");
+  console.log("Commit this file if you want instant cold starts on Vercel.");
 }
 
 buildAndSave();

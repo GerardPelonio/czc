@@ -1,4 +1,5 @@
 const admin = require('firebase-admin');
+const { getDb } = require('../utils/getDb');
 const fetch = require('node-fetch');
 
 const COLLECTION = 'subscriptions';
@@ -13,7 +14,8 @@ const FRONTEND_URL = process.env.FRONTEND_URL;
 // Firestore subscription record creation
 async function createLocalRecord(userId, plan = 'Free', meta = {}) {
   if (!userId) throw Object.assign(new Error('userId required'), { status: 400 });
-  const db = admin.firestore();
+  const db = getDb();
+  if (!db) throw Object.assign(new Error('Firestore not initialized (missing credentials or emulator).'), { status: 500 });
   const now = new Date().toISOString();
   const record = {
     userId,
@@ -32,14 +34,16 @@ async function createLocalRecord(userId, plan = 'Free', meta = {}) {
 
 async function getSubscription(userId) {
   if (!userId) return null;
-  const db = admin.firestore();
+  const db = getDb();
+  if (!db) throw Object.assign(new Error('Firestore not initialized (missing credentials or emulator).'), { status: 500 });
   const snap = await db.collection(COLLECTION).doc(String(userId)).get();
   return snap.exists ? snap.data() : null;
 }
 
 async function updateSubscription(userId, patch = {}) {
   if (!userId) throw Object.assign(new Error('userId required'), { status: 400 });
-  const db = admin.firestore();
+  const db = getDb();
+  if (!db) throw Object.assign(new Error('Firestore not initialized (missing credentials or emulator).'), { status: 500 });
   patch.updatedAt = new Date().toISOString();
   await db.collection(COLLECTION).doc(String(userId)).set(patch, { merge: true });
   const snap = await db.collection(COLLECTION).doc(String(userId)).get();
@@ -48,7 +52,8 @@ async function updateSubscription(userId, patch = {}) {
 
 async function cancelSubscription(userId, opts = {}) {
   if (!userId) throw Object.assign(new Error('userId required'), { status: 400 });
-  const db = admin.firestore();
+  const db = getDb();
+  if (!db) throw Object.assign(new Error('Firestore not initialized (missing credentials or emulator).'), { status: 500 });
   const patch = { status: 'cancelled', endDate: new Date().toISOString(), updatedAt: new Date().toISOString(), ...(opts.patch || {}) };
   await db.collection(COLLECTION).doc(String(userId)).set(patch, { merge: true });
   const snap = await db.collection(COLLECTION).doc(String(userId)).get();
@@ -175,7 +180,8 @@ async function handlepaypalWebhook(rawBuf, headers) {
   if (/CAPTURE.COMPLETED|PAYMENT.CAPTURE.COMPLETED|CHECKOUT.ORDER.APPROVED|ORDER.APPROVED/i.test(String(eventType))) {
     const [userId, plan = 'Premium'] = String(ref).split('|');
     if (!userId) return { ok: true, message: 'no user in reference' };
-    const db = admin.firestore();
+    const db = getDb();
+    if (!db) throw Object.assign(new Error('Firestore not initialized (missing credentials or emulator).'), { status: 500 });
     const now = new Date().toISOString();
     const end = new Date(Date.now() + 30 * 24 * 60 * 60 * 1000).toISOString();
     await db.collection(COLLECTION).doc(String(userId)).set({
@@ -196,7 +202,8 @@ async function handlepaypalWebhook(rawBuf, headers) {
 const DAY_MS = 24 * 60 * 60 * 1000;
 async function runExpiryOnce(dbArg) {
   try {
-    const db = dbArg || admin.firestore();
+    const db = dbArg || getDb();
+    if (!db) throw new Error('Firestore not initialized (missing credentials or emulator).');
     const nowISO = new Date().toISOString();
     const col = db.collection(COLLECTION);
     const q = await col.where('endDate', '<=', nowISO).get();

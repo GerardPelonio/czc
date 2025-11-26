@@ -1,4 +1,5 @@
 const firebase = require('firebase-admin');
+const { getDb } = require('../utils/getDb');
 const { COLLECTION } = require('../models/userModel');
 const bcrypt = require('bcrypt');
 const jwt = require('jsonwebtoken');
@@ -17,7 +18,8 @@ async function changePassword(userId, currentPassword, newPassword) {
   if (!userId) throw Object.assign(new Error('Missing userId'), { status: 400 });
   if (!currentPassword || !newPassword) throw Object.assign(new Error('Current and new password are required'), { status: 400 });
 
-  const db = firebase.firestore();
+  const db = getDb();
+  if (!db) throw Object.assign(new Error('Firestore not initialized (missing credentials or emulator).'), { status: 500 });
   const ref = db.collection(COLLECTION).doc(userId);
   const snap = await ref.get();
   if (!snap.exists) throw Object.assign(new Error('User not found'), { status: 404 });
@@ -34,7 +36,8 @@ async function changePassword(userId, currentPassword, newPassword) {
 }
 
 async function registerUser({ username, email, password, id, role }) {
-  const db = firebase.firestore();
+  const db = getDb();
+  if (!db) throw Object.assign(new Error('Firestore not initialized (missing credentials or emulator).'), { status: 500 });
   const users = db.collection(COLLECTION);
 
   // Check for existing email and username
@@ -57,7 +60,7 @@ async function registerUser({ username, email, password, id, role }) {
     username,
     password: hashed,
     role: normalizeRole(role) || role,
-    createdAt: firebase.firestore.FieldValue.serverTimestamp()
+    createdAt: require('../utils/getDb').serverTimestampOrDate()
   };
 
   await users.doc(docId).set(userData);
@@ -68,7 +71,8 @@ async function registerUser({ username, email, password, id, role }) {
 }
 
 async function authenticateUser(email, password, role) {
-  const db = firebase.firestore();
+  const db = getDb();
+  if (!db) throw Object.assign(new Error('Firestore not initialized (missing credentials or emulator).'), { status: 500 });
   let q = db.collection(COLLECTION).where('email', '==', email).limit(1);
 
   const roleNorm = normalizeRole(role);
@@ -94,7 +98,8 @@ async function authenticateUser(email, password, role) {
 // Generates OTP for password reset
 async function createForgotOtp(email) {
   if (!email) throw Object.assign(new Error('Missing email'), { status: 400 });
-  const db = firebase.firestore();
+  const db = getDb();
+  if (!db) throw Object.assign(new Error('Firestore not initialized (missing credentials or emulator).'), { status: 500 });
   const users = db.collection(COLLECTION);
   const snap = await users.where('email', '==', email).limit(1).get();
   if (snap.empty) throw Object.assign(new Error('User not found'), { status: 404 });
@@ -112,7 +117,8 @@ async function createForgotOtp(email) {
 //Verifies OTP and resets password
 async function resetPasswordByOtp(email, code, newPassword) {
   if (!email || !code || !newPassword) throw Object.assign(new Error('Missing parameters'), { status: 400 });
-  const db = firebase.firestore();
+  const db = getDb();
+  if (!db) throw Object.assign(new Error('Firestore not initialized (missing credentials or emulator).'), { status: 500 });
   const users = db.collection(COLLECTION);
   const snap = await users.where('email', '==', email).limit(1).get();
   if (snap.empty) throw Object.assign(new Error('User not found'), { status: 404 });

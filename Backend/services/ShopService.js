@@ -1,5 +1,6 @@
 // services/ShopService.js
 const admin = require("firebase-admin");
+const { getDb, getFieldValue, serverTimestampOrDate } = require('../utils/getDb');
 
 const err = (msg, status = 400) => {
   const e = new Error(msg);
@@ -16,7 +17,8 @@ async function redeemItem(userId, itemId) {
   if (!userId) throw err("userId is required");
   if (!itemId) throw err("itemId is required");
 
-  const db = admin.firestore();  // <- initialize lazily
+  const db = getDb();  // <- initialize from helper
+  if (!db) throw err('Firestore not initialized (missing credentials or emulator).');
   const shopCollection = db.collection("shop");
   const studentsCollection = db.collection("students");
 
@@ -48,10 +50,11 @@ async function redeemItem(userId, itemId) {
       redeemedAt: new Date().toISOString(),
     };
 
+    const FieldValue = getFieldValue();
     tx.update(studentRef, {
-      coins: admin.firestore.FieldValue.increment(-item.cost),
-      inventory: admin.firestore.FieldValue.arrayUnion(entry),
-      updatedAt: admin.firestore.FieldValue.serverTimestamp(),
+      coins: FieldValue ? FieldValue.increment(-item.cost) : (student.coins - item.cost),
+      inventory: FieldValue ? FieldValue.arrayUnion(entry) : (Array.isArray(student.inventory) ? [...student.inventory, entry] : [entry]),
+      updatedAt: FieldValue ? FieldValue.serverTimestamp() : serverTimestampOrDate(),
     });
 
     return { success: true, item: entry };

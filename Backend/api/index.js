@@ -1,18 +1,8 @@
 // api/index.js
 const app = require('../app');
-const admin = require('firebase-admin');
-
-if (!admin.apps.length) {
-  try {
-    admin.initializeApp({
-      credential: admin.credential.cert(JSON.parse(process.env.FIREBASE_SERVICE_ACCOUNT_JSON))
-    });
-  } catch (err) {
-    // If no service account provided, try default credentials
-    admin.initializeApp();
-  }
-}
-app.locals.db = admin.firestore();
+const { getDb } = require('../utils/getDb');
+// Do not initialize firebase here; server.js handles that. Use getDb helper to get db instance or null.
+app.locals.db = getDb();
 
 module.exports = (req, res) => {
   // Minimal log to help debug routing during vercel dev builds

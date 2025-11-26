@@ -1,8 +1,10 @@
 const firebase = require('firebase-admin');
+const { getDb } = require('../utils/getDb');
 const { COLLECTION } = require('../models/teacherModel');
 
 async function getProfile(userId) {
-  const db = firebase.firestore();
+  const db = getDb();
+  if (!db) return null;
   if (!userId) return null;
   const snap = await db.collection(COLLECTION).doc(userId).get();
   if (!snap.exists) return null;
@@ -15,7 +17,8 @@ async function getProfile(userId) {
 
 async function createProfile(userId, data = {}) {
   if (!userId) throw new Error('Missing userId');
-  const db = firebase.firestore();
+  const db = getDb();
+  if (!db) throw new Error('Firestore not initialized (missing credentials or emulator).');
   const docRef = db.collection(COLLECTION).doc(userId);
 
   const payload = {
@@ -36,7 +39,8 @@ async function createProfile(userId, data = {}) {
 
 async function updateProfile(userId, data = {}) {
   if (!userId) throw new Error('Missing userId');
-  const db = firebase.firestore();
+  const db = getDb();
+  if (!db) throw new Error('Firestore not initialized (missing credentials or emulator).');
   const ref = db.collection(COLLECTION).doc(userId);
   const payload = { ...data, teacherId: userId };
   await ref.set(payload, { merge: true });
@@ -46,7 +50,8 @@ async function updateProfile(userId, data = {}) {
 
 async function deleteProfile(userId) {
   if (!userId) throw new Error('Missing userId');
-  const db = firebase.firestore();
+  const db = getDb();
+  if (!db) throw new Error('Firestore not initialized (missing credentials or emulator).');
   await db.collection(COLLECTION).doc(userId).delete();
   return true;
 }

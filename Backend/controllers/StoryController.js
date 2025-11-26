@@ -8,7 +8,11 @@ const gunzip = promisify(zlib.gunzip);
 // ----------------------------------------------------
 async function getStoryById(req, res) {
   try {
-    const { id } = req.params;
+    let { id } = req.params;
+    if (!id) return res.status(400).json({ success: false, message: "ID required" });
+    // normalize to uppercase so `gb22440` and `GB22440` both work
+    const originalId = id;
+    id = String(id).toUpperCase();
     if (!id) return res.status(400).json({ success: false, message: "ID required" });
 
     console.log(`\nFetching story: ${id}`);
