@@ -19,6 +19,11 @@ const studentQuestSchema = {
       questId: { type: 'string', required: true },
       progress: { type: 'number', default: 0 },
       completed: { type: 'boolean', default: false },
+      // FIX: Add missing fields used by QuestService
+      updatedAt: { type: 'timestamp', default: null },
+      completedAt: { type: 'timestamp', default: null },
+      storyIds: { type: 'array', items: { type: 'string' }, default: [] },
+      chapters: { type: 'array', items: { type: 'string' }, default: [] },
     },
   },
   coins: { type: 'number', default: 0 },

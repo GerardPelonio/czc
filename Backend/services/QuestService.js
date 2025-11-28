@@ -1,4 +1,4 @@
-// Backend/services/QuestService.js - REVISED
+// Backend/services/QuestService.js - REVISED (FIXED)
 
 const fs = require('fs');
 const path = require('path');
@@ -124,16 +124,26 @@ async function updateProgressFirestore(userId, eventType, db, meta) {
         if (!questId) return;
         const entry = questMap.get(questId) || { questId, progress: 0, completed: false };
         if (entry.completed) return;
-        // Respect uniqueStories: only increment progress for unique story IDs
+
+        // FIX (BUG 1): Add unique chapter tracking logic for auto-generated quests here
         if (def.uniqueStories && meta && meta.storyId) {
           entry.storyIds = Array.isArray(entry.storyIds) ? entry.storyIds : [];
           if (!entry.storyIds.includes(meta.storyId)) {
             entry.storyIds.push(meta.storyId);
             entry.progress = (entry.progress || 0) + 1;
           }
+        } else if (def.trigger === 'chapter_completed' && meta && (meta.chapter || meta.chapter === 0)) {
+          // Track unique chapter completions
+          entry.chapters = Array.isArray(entry.chapters) ? entry.chapters : [];
+          const ch = String(meta.chapter); // FIX (BUG 2): Convert to string for consistent comparison
+          if (!entry.chapters.includes(ch)) {
+            entry.chapters.push(ch);
+            entry.progress = (entry.progress || 0) + 1;
+          }
         } else {
           entry.progress = (entry.progress || 0) + 1;
         }
+
         entry.updatedAt = nowIso;
         const target = def.target || DEFAULT_TARGET;
         const reward = typeof def.rewardCoins === 'number' ? def.rewardCoins : DEFAULT_REWARD;
@@ -211,7 +221,7 @@ async function updateProgressFirestore(userId, eventType, db, meta) {
       // Track unique chapter completions so reading the same chapter twice won't increment progress again
       entry.chapters = Array.isArray(entry.chapters) ? entry.chapters : [];
       // store chapter numbers (could be 0-based or 1-based), normalize to string to compare
-      const ch = meta.chapter;
+      const ch = String(meta.chapter); // FIX (BUG 2): Convert to string for consistent comparison
       if (!entry.chapters.includes(ch)) {
         entry.chapters.push(ch);
         entry.progress = (entry.progress || 0) + 1;
@@ -302,7 +312,7 @@ async function updateProgressFallback(userId, eventType, meta) {
         }
       } else if (questDef.trigger === 'chapter_completed' && meta && (meta.chapter || meta.chapter === 0)) {
         questProgress.chapters = Array.isArray(questProgress.chapters) ? questProgress.chapters : [];
-        const ch = meta.chapter;
+        const ch = String(meta.chapter); // FIX (BUG 2): Convert to string for consistent comparison
         if (!questProgress.chapters.includes(ch)) {
           questProgress.chapters.push(ch);
           questProgress.progress = (questProgress.progress || 0) + 1;
