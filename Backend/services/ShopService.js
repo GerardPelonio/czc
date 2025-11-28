@@ -1,10 +1,11 @@
-// services/ShopService.js
+// Backend/services/ShopService.js - FULLY CORRECTED
+
 const admin = require("firebase-admin");
 const { getDb, getFieldValue, serverTimestampOrDate } = require('../utils/getDb');
 
-// FIX: Define the correct collection name as a constant
 const SHOP_COLLECTION = "shopItems"; 
-const STUDENTS_COLLECTION = "students"; // Assuming this remains correct
+const STUDENTS_COLLECTION = "students"; 
+const TRANSACTIONS_COLLECTION = "transactions"; // Assuming a separate collection for shop transactions
 
 const err = (msg, status = 400) => {
   const e = new Error(msg);
@@ -14,21 +15,15 @@ const err = (msg, status = 400) => {
 
 /**
  * List all available shop items with pagination.
- * @param {object} options - Pagination options.
- * @param {number} options.page - Current page number.
- * @param {number} options.limit - Items per page.
  */
 async function listItems({ page = 1, limit = 20 }) {
   const db = getDb();
   if (!db) throw err('Firestore not initialized (missing credentials or emulator).');
   
-  // FIX: Use the correct collection
   const shopCollection = db.collection(SHOP_COLLECTION); 
   
-  // Calculate offset for pagination
   const offset = (page - 1) * limit;
   
-  // Fetch items (ordered by cost by default)
   const snapshot = await shopCollection
     .orderBy('cost', 'asc') 
     .limit(limit)
@@ -40,19 +35,50 @@ async function listItems({ page = 1, limit = 20 }) {
     ...doc.data()
   }));
 
+  // NOTE: In a real app, you would fetch total count here (using count() or a cached value)
   return {
     items,
     page,
     limit,
-    // totalItems, totalPages are typically calculated here
   };
+}
+
+/**
+ * Get a user's transaction history.
+ */
+async function getTransactions(userId, { page = 1, limit = 50 }) {
+    if (!userId) throw err("userId is required");
+
+    const db = getDb();
+    if (!db) throw err('Firestore not initialized (missing credentials or emulator).');
+    
+    // We assume transactions are stored in a top-level collection or a subcollection on the user
+    // Using a top-level collection filtered by userId for scalability:
+    const offset = (page - 1) * limit;
+    
+    const snapshot = await db.collection(TRANSACTIONS_COLLECTION)
+      .where('userId', '==', userId)
+      .orderBy('redeemedAt', 'desc')
+      .limit(limit)
+      .offset(offset)
+      .get();
+      
+    const transactions = snapshot.docs.map(doc => ({
+      transactionId: doc.id,
+      ...doc.data()
+    }));
+
+    return {
+      transactions,
+      page,
+      limit,
+    };
 }
 
 
 /**
  * Redeem a shop item using student coins
- * @param {string} userId
- * @param {string} itemId
+ * (redeemItem logic remains largely the same, but uses SHOP_COLLECTION)
  */
 async function redeemItem(userId, itemId) {
   if (!userId) throw err("userId is required");
@@ -60,10 +86,9 @@ async function redeemItem(userId, itemId) {
 
   const db = getDb();
   if (!db) throw err('Firestore not initialized (missing credentials or emulator).');
-  
-  // FIX: Use the correct collection
-  const shopCollection = db.collection(SHOP_COLLECTION); 
+  const shopCollection = db.collection(SHOP_COLLECTION);
   const studentsCollection = db.collection(STUDENTS_COLLECTION);
+  const transactionsCollection = db.collection(TRANSACTIONS_COLLECTION); // For logging the transaction
 
   const studentRef = studentsCollection.doc(userId);
   const itemRef = shopCollection.doc(itemId);
@@ -78,31 +103,44 @@ async function redeemItem(userId, itemId) {
     const item = itemSnap.data();
 
     const inventory = student.inventory || [];
-    if (inventory.some(i => i.id === itemId)) throw err("Item already owned");
+    // Only throw "Item already owned" if the item type is meant to be unique (e.g., themes, hats)
+    // Assuming custom items are non-consumable and unique for this check.
+    if (inventory.some(i => i.id === itemId && i.type !== 'consumable')) throw err("Item already owned");
     if ((student.coins || 0) < item.cost) throw err("Insufficient coins");
 
     const entry = {
       id: itemId,
       name: item.name || item.title || "Unnamed Item",
-      type: "boost",
+      type: item.type || "boost", // Use item's actual type if present
       icon: item.icon || null,
       cost: item.cost,
-      durationUses: 1,
-      remainingUses: 1,
+      durationUses: item.uses || 1,
+      remainingUses: item.uses || 1,
       used: false,
       redeemedAt: new Date().toISOString(),
     };
 
     const FieldValue = getFieldValue();
+    
+    // 1. Update Student Profile (decrement coins, update inventory)
     tx.update(studentRef, {
       coins: FieldValue ? FieldValue.increment(-item.cost) : (student.coins - item.cost),
       inventory: FieldValue ? FieldValue.arrayUnion(entry) : (Array.isArray(student.inventory) ? [...student.inventory, entry] : [entry]),
       updatedAt: FieldValue ? FieldValue.serverTimestamp() : serverTimestampOrDate(),
     });
+    
+    // 2. Log Transaction
+    const transactionRecord = {
+        userId: userId,
+        itemId: itemId,
+        cost: item.cost,
+        type: item.type || "boost",
+        redeemedAt: FieldValue ? FieldValue.serverTimestamp() : serverTimestampOrDate(),
+    };
+    tx.set(transactionsCollection.doc(), transactionRecord);
 
     return { success: true, item: entry };
   });
 }
 
-// **FIX:** Ensure all functions are exported
-module.exports = { redeemItem, listItems };
+module.exports = { redeemItem, listItems, getTransactions };
