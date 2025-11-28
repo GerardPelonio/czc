@@ -1,4 +1,4 @@
-// Backend/services/QuestService.js - REVISED (FIXED)
+// Backend/services/QuestService.js - FULLY CORRECTED
 
 const fs = require('fs');
 const path = require('path');
@@ -30,6 +30,30 @@ const err = (msg, status = 400) => {
   e.status = status;
   throw e;
 };
+
+// --- NEW HELPER FUNCTION FOR TIME-WINDOW CHECK ---
+function shouldQuestReset(def, entry) {
+    if (!entry.completed || !def.timeWindow || !entry.completedAt) return false;
+
+    const now = new Date();
+    const completedAtDate = new Date(entry.completedAt);
+
+    if (def.timeWindow === 'weekly') {
+        const oneWeekMs = 7 * 24 * 60 * 60 * 1000;
+        // Check if a full 7 days has passed since completion
+        return (now.getTime() - completedAtDate.getTime()) >= oneWeekMs;
+    }
+
+    if (def.timeWindow === 'monthly') {
+        // Check if the current month is different from the completed month (and year)
+        return now.getFullYear() > completedAtDate.getFullYear() || 
+               (now.getFullYear() === completedAtDate.getFullYear() && now.getMonth() > completedAtDate.getMonth());
+    }
+    
+    // Quests with other timeWindows (like 'Session') or no timeWindow are treated as one-time completions
+    return false;
+}
+// ----------------------------------------------------
 
 function ensureFallbackFile() {
   try {
@@ -122,10 +146,19 @@ async function updateProgressFirestore(userId, eventType, db, meta) {
       questDefinitions.forEach(def => {
         const questId = def.questId || def.id;
         if (!questId) return;
-        const entry = questMap.get(questId) || { questId, progress: 0, completed: false };
-        if (entry.completed) return;
+        let entry = questMap.get(questId) || { questId, progress: 0, completed: false };
 
-        // FIX (BUG 1): Add unique chapter tracking logic for auto-generated quests here
+        if (shouldQuestReset(def, entry)) {
+            entry.completed = false;
+            entry.progress = 0;
+            entry.completedAt = null;
+            entry.storyIds = [];
+            entry.chapters = [];
+            if (dbg) console.log(`[QuestService] Resetting auto-generated quest: ${questId}`);
+        }
+        if (entry.completed) return;
+        
+        // Respect uniqueStories: only increment progress for unique story IDs
         if (def.uniqueStories && meta && meta.storyId) {
           entry.storyIds = Array.isArray(entry.storyIds) ? entry.storyIds : [];
           if (!entry.storyIds.includes(meta.storyId)) {
@@ -133,20 +166,22 @@ async function updateProgressFirestore(userId, eventType, db, meta) {
             entry.progress = (entry.progress || 0) + 1;
           }
         } else if (def.trigger === 'chapter_completed' && meta && (meta.chapter || meta.chapter === 0)) {
-          // Track unique chapter completions
-          entry.chapters = Array.isArray(entry.chapters) ? entry.chapters : [];
-          const ch = String(meta.chapter); // FIX (BUG 2): Convert to string for consistent comparison
-          if (!entry.chapters.includes(ch)) {
-            entry.chapters.push(ch);
-            entry.progress = (entry.progress || 0) + 1;
-          }
+            // Track unique chapter completions
+            entry.chapters = Array.isArray(entry.chapters) ? entry.chapters : [];
+            const ch = String(meta.chapter); // Ensure string conversion for consistency
+            if (!entry.chapters.includes(ch)) {
+              entry.chapters.push(ch);
+              entry.progress = (entry.progress || 0) + 1;
+            }
         } else {
           entry.progress = (entry.progress || 0) + 1;
         }
-
         entry.updatedAt = nowIso;
-        const target = def.target || DEFAULT_TARGET;
+        
+        // FIX: Check for the common typo 'targer' if 'target' is missing
+        const target = def.target || def.targer || DEFAULT_TARGET;
         const reward = typeof def.rewardCoins === 'number' ? def.rewardCoins : DEFAULT_REWARD;
+        
         if (entry.progress >= target) {
           entry.completed = true;
           entry.completedAt = nowIso;
@@ -200,11 +235,23 @@ async function updateProgressFirestore(userId, eventType, db, meta) {
   const nowIso = new Date().toISOString();
 
   questDefinitions.forEach(def => {
-    if (dbg) console.log('[QuestService] processing quest def', { questId: def.questId, target: def.target, rewardCoins: def.rewardCoins, uniqueStories: def.uniqueStories });
+    if (dbg) console.log('[QuestService] processing quest def', { questId: def.questId, target: def.target, rewardCoins: def.rewardCoins, uniqueStories: def.uniqueStories, timeWindow: def.timeWindow });
     const questId = def.questId || def.id;
     if (!questId) return;
 
-    const entry = questMap.get(questId) || { questId, progress: 0, completed: false };
+    let entry = questMap.get(questId) || { questId, progress: 0, completed: false };
+    
+    // LOGIC: Handle Repeatable Quests/Time Windows
+    if (shouldQuestReset(def, entry)) {
+        entry.completed = false;
+        entry.progress = 0;
+        entry.completedAt = null;
+        // Important: Reset tracking arrays too!
+        entry.storyIds = []; 
+        entry.chapters = [];
+        if (dbg) console.log(`[QuestService] Resetting repeatable quest: ${questId} (${def.timeWindow})`);
+    }
+    
     if (entry.completed) {
       if (dbg) console.log('[QuestService] skipping completed quest', { questId, userId });
       return;
@@ -218,10 +265,9 @@ async function updateProgressFirestore(userId, eventType, db, meta) {
         entry.progress = (entry.progress || 0) + 1;
       }
     } else if (def.trigger === 'chapter_completed' && meta && (meta.chapter || meta.chapter === 0)) {
-      // Track unique chapter completions so reading the same chapter twice won't increment progress again
+      // Track unique chapter completions
       entry.chapters = Array.isArray(entry.chapters) ? entry.chapters : [];
-      // store chapter numbers (could be 0-based or 1-based), normalize to string to compare
-      const ch = String(meta.chapter); // FIX (BUG 2): Convert to string for consistent comparison
+      const ch = String(meta.chapter); // FIX: Convert to string for consistent comparison
       if (!entry.chapters.includes(ch)) {
         entry.chapters.push(ch);
         entry.progress = (entry.progress || 0) + 1;
@@ -231,8 +277,11 @@ async function updateProgressFirestore(userId, eventType, db, meta) {
     }
     entry.updatedAt = nowIso;
 
-    const target = def.target || DEFAULT_TARGET;
+    // FIX: Check for the common typo 'targer' if 'target' is missing
+    const target = def.target || def.targer || DEFAULT_TARGET; 
     const reward = typeof def.rewardCoins === 'number' ? def.rewardCoins : DEFAULT_REWARD;
+    
+    // LOGIC: ONLY AWARD COINS IF PROGRESS MEETS TARGET
     if (entry.progress >= target) {
       entry.completed = true;
       entry.completedAt = nowIso;
@@ -290,7 +339,7 @@ async function updateProgressFallback(userId, eventType, meta) {
 
   const questDef = state.questDefinitions[eventType];
   const existingIndex = userState.quests.findIndex(q => q && q.questId === questDef.questId);
-  const questProgress = existingIndex >= 0 ? { ...userState.quests[existingIndex] } : {
+  let questProgress = existingIndex >= 0 ? { ...userState.quests[existingIndex] } : {
     questId: questDef.questId,
     progress: 0,
     completed: false,
@@ -299,7 +348,17 @@ async function updateProgressFallback(userId, eventType, meta) {
   let coinsEarned = 0;
   let error = null;
   const nowIso = new Date().toISOString();
-
+  
+  // LOGIC: Handle Repeatable Quests/Time Windows in Fallback
+  if (shouldQuestReset(questDef, questProgress)) {
+      questProgress.completed = false;
+      questProgress.progress = 0;
+      questProgress.completedAt = null;
+      questProgress.storyIds = [];
+      questProgress.chapters = [];
+      if (dbg) console.log(`[QuestService] Resetting fallback quest: ${questDef.questId} (${questDef.timeWindow})`);
+  }
+  
     if (questProgress.completed) {
     error = 'Quest already completed';
   } else {
@@ -312,7 +371,7 @@ async function updateProgressFallback(userId, eventType, meta) {
         }
       } else if (questDef.trigger === 'chapter_completed' && meta && (meta.chapter || meta.chapter === 0)) {
         questProgress.chapters = Array.isArray(questProgress.chapters) ? questProgress.chapters : [];
-        const ch = String(meta.chapter); // FIX (BUG 2): Convert to string for consistent comparison
+        const ch = String(meta.chapter); // FIX: Ensure string conversion for consistency
         if (!questProgress.chapters.includes(ch)) {
           questProgress.chapters.push(ch);
           questProgress.progress = (questProgress.progress || 0) + 1;
@@ -320,7 +379,11 @@ async function updateProgressFallback(userId, eventType, meta) {
       } else {
         questProgress.progress = (questProgress.progress || 0) + 1;
       }
-    if (questProgress.progress >= (questDef.target || DEFAULT_TARGET)) {
+    
+    // FIX: Check for the common typo 'targer' if 'target' is missing
+    const target = questDef.target || questDef.targer || DEFAULT_TARGET; 
+
+    if (questProgress.progress >= target) {
       questProgress.completed = true;
       questProgress.completedAt = nowIso;
       coinsEarned = questDef.rewardCoins || DEFAULT_REWARD;
