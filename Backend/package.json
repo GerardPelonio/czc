@@ -8,6 +8,9 @@
     "test": "jest",
     "lint": "eslint .",
     "migrate:quizzes": "node tools/migrate-quizzes.js",
+    "migrate:quests": "node tools/migrate-quests.js",
+    "migrate:quests:seed": "node tools/migrate-quests.js seed",
+    "migrate:quests:convert-students": "node tools/migrate-quests.js --convert-student-quests",
     "generate:library": "node scripts/generate-library.js"
   },
   "dependencies": {

@@ -1,9 +1,9 @@
 // controllers/QuestController.js
-const QuestModel = require("../models/QuestModel");
+const QuestService = require('../services/QuestService');
 
 async function updateProgress(req, res) {
   try {
-    const { userId, eventType } = req.body || {};
+    const { userId, eventType, meta } = req.body || {};
 
     if (!userId || !eventType) {
       return res.status(400).json({
@@ -12,7 +12,7 @@ async function updateProgress(req, res) {
       });
     }
 
-    const result = await QuestModel.updateProgress(userId, eventType);
+    const result = await QuestService.updateUserQuestProgress(userId, eventType, meta);
 
     return res.status(200).json({
       success: true,
