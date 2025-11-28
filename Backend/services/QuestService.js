@@ -1,3 +1,5 @@
+// Backend/services/QuestService.js - REVISED
+
 const fs = require('fs');
 const path = require('path');
 const { getDb, serverTimestampOrDate } = require('../utils/getDb');
@@ -7,6 +9,7 @@ const STUDENT_COLLECTION = 'students';
 const FALLBACK_FILE = path.join(__dirname, '..', 'data', 'quest-progress.json');
 const DEFAULT_TARGET = 1;
 const DEFAULT_REWARD = 5;
+
 // default rewards per trigger eventType — override default reward for common triggers
 const DEFAULT_REWARDS_BY_TRIGGER = {
   story_completed: 70,
@@ -14,6 +17,12 @@ const DEFAULT_REWARDS_BY_TRIGGER = {
   chapter_read: 30,
   chapter_completed: 20,
 };
+
+// NEW: Default targets per trigger eventType — override default target for specific triggers
+const DEFAULT_TARGETS_BY_TRIGGER = {
+  chapter_completed: 5, // Requires 5 unique chapters to be completed for the auto-generated quest
+};
+
 const dbg = !!process.env.DEBUG_QUESTS;
 
 const err = (msg, status = 400) => {
@@ -61,12 +70,14 @@ function buildDefaultQuest(eventType) {
   const now = new Date().toISOString();
   const normalized = typeof eventType === 'string' ? eventType.trim() : eventType;
   const reward = (normalized && DEFAULT_REWARDS_BY_TRIGGER[normalized]) || DEFAULT_REWARD;
+  // Use new default target for the event type, or fall back to DEFAULT_TARGET (1)
+  const target = (normalized && DEFAULT_TARGETS_BY_TRIGGER[normalized]) || DEFAULT_TARGET; 
   return {
     questId: eventType,
     title: `Complete ${eventType}`,
     description: `Auto-generated quest for event "${eventType}"`,
     trigger: eventType,
-    target: DEFAULT_TARGET,
+    target: target,
     rewardCoins: reward,
     createdAt: now,
     updatedAt: now,
