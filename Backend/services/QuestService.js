@@ -421,4 +421,4 @@ async function updateUserQuestProgress(userId, eventType, meta) {
 
 module.exports = {
   updateUserQuestProgress,
-};v
+};
