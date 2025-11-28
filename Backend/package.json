@@ -27,7 +27,7 @@
     "morgan": "^1.10.1",
     "nodemailer": "^7.0.10",
     "validator": "^13.11.0",
-    "vercel": "^48.10.11"
+    "vercel": "^28.18.5"
   },
   "devDependencies": {
     "eslint": "^8.57.1",
