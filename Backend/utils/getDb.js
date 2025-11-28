@@ -31,16 +31,22 @@ function getDb() {
             firebase.initializeApp();
           }
         } catch (e) {
+          // This catch block handles initialization failure. The 'v is not defined' error
+          // might be thrown from here or immediately after if initialization fails.
           console.warn('getDb: failed to initialize firebase from env vars; continuing with null db', e && e.message ? e.message : e);
         }
       }
     }
     if (firebase.apps && firebase.apps.length) {
-      return firebase.firestore();
+      // It is safer to check if firebase.firestore is a function before calling it
+      if (typeof firebase.firestore === 'function') {
+        return firebase.firestore();
+      }
     }
     console.warn('getDb: firebase not initialized — returning null. Initialize firebase via server.js or set FIREBASE_* env vars.');
     return null;
   } catch (e) {
+    // This is the outer catch block. Any unhandled error inside the try block lands here.
     console.warn('getDb: error while getting firestore', e && e.message ? e.message : e);
     return null;
   }

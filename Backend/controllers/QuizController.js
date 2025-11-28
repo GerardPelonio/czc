@@ -174,10 +174,13 @@ async function submitQuiz(req, res) {
       return { question: q.question, userAnswer: answers[i], correctAnswer: q.correctAnswer, isCorrect, explanation: q.explanation };
     });
 
-    const coinsEarned = correct;
     const score = correct;
     const accuracy = (correct / quiz.numQuestions) * 100;
     const bonus = accuracy === 100 && Number(timeTaken) < 120 ? 10 : 0;
+    
+    // FIX APPLIED HERE: Include the bonus in coinsEarned
+    const coinsEarned = correct + bonus;
+    
     const totalPoints = score * 5 + bonus;
 
     await saveQuizFallback(userId, storyId, { ...quiz, submitted: true, lastScore: score, lastAccuracy: accuracy, lastTime: timeTaken, lastBonus: bonus, results, submittedAt: new Date().toISOString() }, db);
