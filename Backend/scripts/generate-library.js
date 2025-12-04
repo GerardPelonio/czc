@@ -1,5 +1,5 @@
 // scripts/generate-library.js
-// Run: node scripts/generate-library.js  (only once!)
+// Run: node scripts/generate-library.js
 require('dotenv').config();
 const axios = require("axios");
 const fs = require("fs");
@@ -8,42 +8,88 @@ const path = require("path");
 const GEMINI_API_KEY = process.env.GEMINI_API_KEY;
 const GEMINI_URL = "https://generativelanguage.googleapis.com/v1beta/models/gemini-1.5-flash:generateContent";
 
-const pageCountCache = new Map();
+// STRICT CONFIGURATION (Must match Controller)
+const MIN_WORDS = 2500;
+const MAX_WORDS = 4500; 
+const WORDS_PER_PAGE = 250;
+
 let perfectBooks = [];
 
 // ----------------------------------------------------
-// Get page count (5–15 pages only)
+// 1. Process Content (Strict Filter)
 // ----------------------------------------------------
-async function getPageCount(textUrl, bookId) {
-  if (pageCountCache.has(bookId)) return pageCountCache.get(bookId);
-
+async function analyzeBook(textUrl, bookTitle) {
   try {
-    const { data: text } = await axios.get(textUrl, { timeout: 15000 });
-    let cleanText = text;
-    const start = text.indexOf("*** START");
-    const end = text.indexOf("*** END");
-    if (start !== -1 && end !== -1) cleanText = text.slice(start, end);
+    // 60KB limit prevents downloading massive novels
+    const MAX_SIZE_BYTES = 60 * 1024; 
+    
+    const response = await axios.get(textUrl, { 
+      timeout: 10000,
+      maxContentLength: MAX_SIZE_BYTES,
+      validateStatus: (status) => status === 200
+    });
 
-    cleanText = cleanText.replace(/[\r\n]+/g, "\n").replace(/Project Gutenberg.*/gi, "").trim();
-    const wordCount = cleanText.split(/\s+/).filter(w => w.length > 0).length;
-    let pages = Math.round(wordCount / 275);
-    pages = Math.max(5, Math.min(15, pages));
+    let text = response.data || '';
 
-    pageCountCache.set(bookId, pages);
-    return pages;
+    // Reject obvious long structures
+    const structureChecks = [
+        /Chapter\s+(?:XX|20)/i, 
+        /Index\s*$/i,           
+        /Bibliography/i        
+    ];
+    for (const check of structureChecks) {
+        if (check.test(text.substring(0, 5000)) || check.test(text.substring(text.length - 5000))) {
+            return { valid: false, reason: "Structure (Index/Chapters)" };
+        }
+    }
+
+    // Strip Gutenberg Headers
+    const startMarkers = ["*** START", "START OF THIS PROJECT", "Produced by"];
+    const endMarkers = ["*** END", "End of the Project", "End of Project"];
+    let startIdx = 0;
+    let endIdx = text.length;
+
+    for (const m of startMarkers) {
+        const i = text.indexOf(m);
+        if (i !== -1) {
+            const nextLine = text.indexOf('\n', i);
+            if (nextLine !== -1) startIdx = nextLine + 1;
+            break;
+        }
+    }
+    for (const m of endMarkers) {
+        const i = text.lastIndexOf(m);
+        if (i !== -1) {
+            endIdx = i;
+            break;
+        }
+    }
+    if (endIdx > startIdx) text = text.slice(startIdx, endIdx);
+
+    // Count Words
+    const cleanText = text.replace(/[\r\n\t]+/g, ' ').replace(/\s+/g, ' ').trim();
+    const wordCount = cleanText.split(' ').length;
+
+    // STRICT CHECK
+    if (wordCount < MIN_WORDS || wordCount > MAX_WORDS) {
+        return { valid: false, reason: `Word count: ${wordCount}` };
+    }
+
+    const pages = Math.round(wordCount / WORDS_PER_PAGE);
+    return { valid: true, pages, wordCount };
+
   } catch (err) {
-    const fallback = 7 + (bookId % 8);
-    pageCountCache.set(bookId, fallback);
-    return fallback;
+    return { valid: false, reason: err.message };
   }
 }
 
 // ----------------------------------------------------
-// Load raw books from Gutendex
+// 2. Load Raw Books
 // ----------------------------------------------------
 async function loadRawBooks() {
   const agent = new (require("https").Agent)({ rejectUnauthorized: false });
-  const searchTerms = encodeURIComponent("short story OR short stories OR fable OR parable OR one act");
+  // Search for specific short story terms
+  const searchTerms = encodeURIComponent("short story OR short stories OR tale OR fable");
 
   try {
     const [p1, p2] = await Promise.all([
@@ -52,100 +98,111 @@ async function loadRawBooks() {
     ]);
 
     const all = [...(p1.data.results || []), ...(p2.data.results || [])];
-    console.log(`Gutendex loaded ${all.length} raw books`);
+    console.log(`Gutendex found ${all.length} candidates.`);
+    
+    // Deduplicate
+    const unique = Array.from(new Map(all.map(item => [item.id, item])).values());
 
-    return all.filter(book =>
+    return unique.filter(book =>
       book.formats &&
-      (book.formats["text/plain"] ||
-       book.formats["text/plain; charset=us-ascii"] ||
-       book.formats["text/html"])
+      (book.formats["text/plain"] || book.formats["text/plain; charset=utf-8"] || book.formats["text/plain; charset=us-ascii"])
     );
   } catch (err) {
-    console.log("Gutendex failed, using empty list");
+    console.log("Gutendex failed:", err.message);
     return [];
   }
 }
 
 // ----------------------------------------------------
-// Assign genre using Gemini
+// 3. Assign Metadata (Gemini)
 // ----------------------------------------------------
-async function filterWithGrokBrain(rawBooks) {
-  if (rawBooks.length === 0) return [];
+async function filterWithGemini(validBooks) {
+  if (validBooks.length === 0) return [];
+  console.log(`Asking Gemini to classify ${validBooks.length} verified short stories...`);
 
   const prompt = `
-You are an expert DepEd English teacher in the Philippines.
-Pick 70–90 short stories safe for Filipino students.
-Assign each: school_level ("Junior High" or "Senior High") and genre (Mystery, Horror, Sci-Fi, Humor, Romance, Drama, Adventure, Fantasy)
-Return ONLY clean JSON array: [{"id": 1952, "level": "Senior High", "genre": "Horror"}, ...]
+You are an expert English teacher.
+Classify these books for Filipino students.
+Return JSON array: [{"id": 123, "level": "Senior High", "genre": "Horror"}, ...]
+Options:
+- level: "Junior High" or "Senior High"
+- genre: Mystery, Horror, Sci-Fi, Humor, Romance, Drama, Fantasy
 Books:
-${rawBooks.map(b => `${b.id}: "${b.title}" by ${b.authors?.[0]?.name || "Unknown"}`).join("\n")}
+${validBooks.map(b => `${b.id}: "${b.title}"`).join("\n")}
 `.trim();
 
   try {
     const res = await axios.post(`${GEMINI_URL}?key=${GEMINI_API_KEY}`, {
       contents: [{ role: "user", parts: [{ text: prompt }] }],
-      generationConfig: { temperature: 0.5, maxOutputTokens: 6000, responseMimeType: "application/json" },
+      generationConfig: { temperature: 0.5, maxOutputTokens: 8000, responseMimeType: "application/json" },
     }, { timeout: 60000 });
 
     let text = res.data.candidates?.[0]?.content?.parts?.[0]?.text || "[]";
-    text = text.replace(/```json|```/g, "").trim();
-    const list = JSON.parse(text);
-
-    const validIds = rawBooks.map(b => b.id);
-    return list.filter(x => validIds.includes(x.id));
+    const list = JSON.parse(text.replace(/```json|```/g, "").trim());
+    return list;
   } catch (err) {
-    console.log("Gemini failed → using fallback genres");
-    const genres = ["Mystery", "Horror", "Sci-Fi", "Humor", "Romance", "Drama", "Adventure", "Fantasy"];
-    return rawBooks
-      .sort((a, b) => (b.download_count || 0) - (a.download_count || 0))
-      .slice(0, 85)
-      .map((b, i) => ({ id: b.id, level: i < 38 ? "Senior High" : "Junior High", genre: genres[i % 8] }));
+    console.log("Gemini failed, using fallback genres.");
+    return []; // fallback logic handled in buildAndSave
   }
 }
 
 // ----------------------------------------------------
-// Build final library & SAVE TO FILE
+// 4. Build & Save
 // ----------------------------------------------------
 async function buildAndSave() {
-  console.log("Building your perfect CozyClip library... (2–3 minutes)");
+  console.log("--- Starting Strict Library Generation ---");
   const rawBooks = await loadRawBooks();
-  const approved = await filterWithGrokBrain(rawBooks);
+  
+  const verifiedBooks = [];
+  let processed = 0;
 
-  const books = [];
-  for (const item of approved) {
-    const b = rawBooks.find(book => book.id === item.id);
-    if (!b) continue;
+  // Process sequentially or in small chunks to avoid rate limits/timeouts
+  for (const b of rawBooks) {
+    process.stdout.write(`Processing ${++processed}/${rawBooks.length}: ${b.title.substring(0, 20)}... `);
+    
+    const txtUrl = b.formats["text/plain"] || b.formats["text/plain; charset=utf-8"] || b.formats["text/plain; charset=us-ascii"];
+    if (!txtUrl) { console.log("No text."); continue; }
 
-    const txtUrl = Object.values(b.formats || {}).find(v => typeof v === "string" && (v.includes("text/plain") || v.endsWith(".txt"))) ||
-                   `https://www.gutenberg.org/files/${b.id}/${b.id}-0.txt`;
-    const pages = await getPageCount(txtUrl, b.id);
-
-    books.push({
-      id: `GB${b.id}`,
-      title: (b.title || "Story").split(/ by |,|\(/i)[0].trim(),
-      author: b.authors?.[0]?.name || "Unknown Author",
-      cover_url: b.formats["image/jpeg"] || `https://www.gutenberg.org/cache/epub/${b.id}/pg${b.id}.cover.medium.jpg`,
-      source_url: txtUrl,
-      school_level: item.level.includes("Senior") ? "Senior High" : "Junior High",
-      grade_range: item.level.includes("Senior") ? "11–12" : "7–10",
-      age_range: item.level.includes("Senior") ? "16–18" : "12–16",
-      genre: item.genre || "Drama",
-      pages,
-      reading_time: `${Math.round(pages * 2.3)} minutes`
-    });
+    const analysis = await analyzeBook(txtUrl, b.title);
+    
+    if (analysis.valid) {
+        console.log(`✅ MATCH! (${analysis.pages} pages)`);
+        verifiedBooks.push({ ...b, ...analysis });
+    } else {
+        console.log(`❌ Skipped (${analysis.reason})`);
+    }
   }
 
-  perfectBooks = books;
-  const senior = books.filter(b => b.school_level === "Senior High").length;
-  console.log(`LIBRARY BUILT: ${books.length} books | Senior: ${senior} | Junior: ${books.length - senior}`);
+  // Get AI Metadata
+  const metadataList = await filterWithGemini(verifiedBooks);
+  
+  // Merge Data
+  const finalLibrary = verifiedBooks.map(b => {
+    const meta = metadataList.find(m => m.id === b.id) || {};
+    const fallbackGenre = ["Mystery", "Humor", "Sci-Fi", "Drama"][b.id % 4];
+    
+    return {
+      id: `GB${b.id}`,
+      title: (b.title || "Untitled").split(/ by |,/i)[0].trim(),
+      author: b.authors?.[0]?.name || "Unknown Author",
+      cover_url: b.formats["image/jpeg"] || `https://www.gutenberg.org/cache/epub/${b.id}/pg${b.id}.cover.medium.jpg`,
+      source_url: b.formats["text/plain"] || b.formats["text/plain; charset=utf-8"],
+      school_level: meta.level || (Math.random() > 0.5 ? "Senior High" : "Junior High"),
+      grade_range: "7–12",
+      age_range: "12–18",
+      genre: meta.genre || fallbackGenre,
+      pages: b.pages,
+      word_count: b.wordCount,
+      reading_time: `${Math.round(b.pages * 2)} mins`
+    };
+  });
 
-  // SAVE TO CACHE FILE used by the running server
+  console.log(`\nLIBRARY COMPLETE: ${finalLibrary.length} Verified Books`);
+
   const outputPath = path.join(__dirname, "../data/perfect-books-cache.json");
   fs.mkdirSync(path.dirname(outputPath), { recursive: true });
-  fs.writeFileSync(outputPath, JSON.stringify(books, null, 2));
-
-  console.log("perfect-books-cache.json saved to Backend/data — your server will use it on startup.");
-  console.log("Commit this file if you want instant cold starts on Vercel.");
+  fs.writeFileSync(outputPath, JSON.stringify(finalLibrary, null, 2));
+  console.log(`Saved to ${outputPath}`);
 }
 
 buildAndSave();
