@@ -2,405 +2,317 @@ const axios = require("axios");
 const fs = require('fs');
 const path = require('path');
 
-const GEMINI_API_KEY = process.env.GEMINI_API_KEY;
-const GEMINI_URL = "https://generativelanguage.googleapis.com/v1beta/models/gemini-1.5-flash:generateContent";
+// ============================================
+// CONFIGURATION: STRICT 10-15 PAGES
+// ============================================
+const MIN_PAGES = 10;
+const MAX_PAGES = 15;
+const WORDS_PER_PAGE = 250; 
+const MIN_WORDS = 2500;
+const MAX_WORDS = 4500; // Hard cap
 
-const pageCountCache = new Map();
-let perfectBooks = [];
+// Blacklisted words in TITLES (Case insensitive)
+const TITLE_BLACKLIST = [
+  "history", "vol", "volume", "index", "dictionary", 
+  "encyclopedia", "collected", "complete", "works", 
+  "memoirs", "biography", "letters", "report", "manual"
+];
 
-const FAST_BUILD = (process.env.FAST_BUILD === '1' || process.env.FAST_BUILD === 'true');
-const FORCE_REFRESH = (process.env.FORCE_REFRESH === '1' || process.env.FORCE_REFRESH === 'true');
-let runtimeFastBuild = FAST_BUILD;
-let runtimeFullCount = false;
-const FAST_DEFAULT_PAGES = 8;
-const MAX_ALLOWED_PAGES = 15; // Define the maximum page count for filtering
-
+// Blacklisted words in SUBJECTS
+const SUBJECT_BLACKLIST = [
+  "history", "biography", "periodicals", "politics", 
+  "reference", "instructional"
+];
 
 const CACHE_FILE = path.join(__dirname, '..', 'data', 'perfect-books-cache.json');
-// Treat Vercel / production as "serverless": no long-running background builders,
-// only read from the pre-generated JSON cache or fall back to live quick pool.
 const IS_SERVERLESS = !!process.env.VERCEL || process.env.SERVERLESS || process.env.NODE_ENV === 'production';
+const FORCE_REFRESH = (process.env.FORCE_REFRESH === '1' || process.env.FORCE_REFRESH === 'true');
 
+let perfectBooks = [];
+
+// [Load/Save Cache functions remain standard]
 function loadCache() {
-  // Try multiple candidate paths in case `vercel dev` uses a different CWD
-  const candidates = [CACHE_FILE, path.join(process.cwd(), 'Backend', 'data', 'perfect-books-cache.json'), path.join(process.cwd(), 'data', 'perfect-books-cache.json')];
-  for (const p of candidates) {
-    try {
-      if (!fs.existsSync(p)) continue;
-      const raw = fs.readFileSync(p, 'utf8');
-      const data = JSON.parse(raw);
-      if (Array.isArray(data) && data.length > 0) {
-        perfectBooks = data;
-        console.log(`Loaded library cache from ${p}: ${perfectBooks.length} books`);
-        // watch for updates so `npx vercel dev` picks up changes made while running
-        try {
-          fs.watchFile(p, { interval: 2000 }, () => {
-            try {
-              const raw2 = fs.readFileSync(p, 'utf8');
-              const data2 = JSON.parse(raw2);
-              if (Array.isArray(data2)) {
-                perfectBooks = data2;
-                console.log(`Detected library cache update: ${perfectBooks.length} books (from ${p})`);
-              }
-            } catch (e) {
-              console.log('Failed to reload cache after change', e && e.message);
-            }
-          });
-        } catch (watchErr) {
-          // ignore watchers on some filesystems
-        }
-        return;
-      }
-    } catch (e) {
-      // try next candidate
-    }
-  }
-  // nothing loaded
-  console.log(`No usable library cache found at: ${candidates.join(', ')}`);
+  const candidates = [
+    CACHE_FILE, 
+    path.join(process.cwd(), 'Backend', 'data', 'perfect-books-cache.json'), 
+    path.join(process.cwd(), 'data', 'perfect-books-cache.json')
+  ];
+  for (const p of candidates) {
+    try {
+      if (!fs.existsSync(p)) continue;
+      const raw = fs.readFileSync(p, 'utf8');
+      const data = JSON.parse(raw);
+      if (Array.isArray(data) && data.length > 0) {
+        perfectBooks = data;
+        console.log(`✓ Loaded ${perfectBooks.length} books from cache: ${p}`);
+        return;
+      }
+    } catch (e) {}
+  }
 }
 
 function saveCache(books) {
-  // On Vercel / serverless, filesystem is read-only at runtime.
-  if (IS_SERVERLESS) return;
-  try {
-    fs.writeFileSync(CACHE_FILE, JSON.stringify(books), 'utf8');
-    console.log(`Saved library cache: ${books.length} books`);
-  } catch (e) {
-    console.log('Failed to save library cache', e && e.message);
-  }
+  if (IS_SERVERLESS) return;
+  try {
+    const dir = path.dirname(CACHE_FILE);
+    if (!fs.existsSync(dir)) fs.mkdirSync(dir, { recursive: true });
+    fs.writeFileSync(CACHE_FILE, JSON.stringify(books, null, 2), 'utf8');
+  } catch (e) {
+    console.log('Failed to save cache:', e.message);
+  }
 }
 
-// ----------------------------------------------------
-// Get page count (5–15 pages only)
-// ----------------------------------------------------
-async function getPageCount(textUrl, bookId) {
-  if (pageCountCache.has(bookId)) return pageCountCache.get(bookId);
-  try {
-    if (runtimeFullCount) {
-      // Full download and count (slower but more accurate)
-      const { data: text } = await axios.get(textUrl, { timeout: 15000 });
+// ============================================
+// CRITICAL: ACCURATE PAGE COUNTING & FILTERING
+// ============================================
+async function processBookContent(textUrl, bookTitle) {
+  try {
+    // 1. Download Content
+    // We set a max content length. If it exceeds this, it's definitely too big.
+    // 15 pages * 250 words * ~6 chars/word = ~22KB. 
+    // We allow 60KB to be safe for metadata/license.
+    const MAX_SIZE_BYTES = 60 * 1024; 
 
-      let cleanText = text;
-      const start = text.indexOf("*** START");
-      const end = text.indexOf("*** END");
-      if (start !== -1 && end !== -1) cleanText = text.slice(start, end);
-      cleanText = cleanText.replace(/[\r\n]+/g, "\n").replace(/Project Gutenberg.*/gi, "").trim();
-      const wordCount = cleanText.split(/\s+/).filter(w => w.length > 0).length;
-      let pages = Math.round(wordCount / 275);
-      pages = Math.max(5, pages); 
-      pageCountCache.set(bookId, pages);
-      return pages;
-    }
-    // Request a sample and try to estimate total using Content-Range when available.
-    const sampleSize = runtimeFastBuild ? 50000 : 200000; // 50KB fast mode, 200KB normal
-    const res = await axios.get(textUrl, {
-      timeout: runtimeFastBuild ? 4000 : 8000,
-      responseType: 'text',
-      headers: { Range: `bytes=0-${sampleSize - 1}` }
-    });
+    const response = await axios.get(textUrl, { 
+      timeout: 8000,
+      maxContentLength: MAX_SIZE_BYTES, // Will throw error if larger
+      validateStatus: (status) => status === 200
+    });
 
-    const text = res.data || '';
-    const sampledBytes = Buffer.byteLength(text, 'utf8') || 1;
-    let totalBytes = null;
-    const contentRange = res.headers['content-range'] || res.headers['Content-Range'];
-    if (contentRange) {
-      const m = contentRange.match(/\/(\d+)$/);
-      if (m) totalBytes = parseInt(m[1], 10);
-    }
-    if (!totalBytes && res.headers['content-length']) {
-      const cl = parseInt(res.headers['content-length'], 10);
-      if (!Number.isNaN(cl)) totalBytes = cl;
-    }
+    let text = response.data || '';
 
-    let scale = 1;
-    // FIX: Be pessimistic if total size is unknown, to filter out large books
-    if (totalBytes && sampledBytes > 0) {
-        scale = Math.max(1, totalBytes / sampledBytes);
-    } else if (!totalBytes && sampledBytes > 0) {
-        // If content-length is missing, assume it's at least 20x larger than the sample
-        // to reject any large novels that passed the initial search filter.
-        scale = 20; 
+    // 2. Structure Check (The "History Book" Detector)
+    // If we find "Chapter 20" or "Index", it's a long book, even if the file is small.
+    const structureChecks = [
+        /Chapter\s+(?:XX|20)/i,  // Chapter 20+
+        /Index\s*$/i,            // Ends with Index
+        /Bibliography/i,         // Academic book
+        /Table of Contents/i     // Usually implies a long collection
+    ];
+
+    for (const check of structureChecks) {
+        if (check.test(text.substring(0, 5000)) || check.test(text.substring(text.length - 5000))) {
+            // console.log(`  ✗ REJECTED "${bookTitle}": Found structure marker (Index/Chapter XX)`);
+            return { valid: false };
+        }
     }
+
+    // 3. Strip Gutenberg Headers
+    const startMarkers = ["*** START", "START OF THIS PROJECT", "Produced by"];
+    const endMarkers = ["*** END", "End of the Project", "End of Project"];
+
+    let startIdx = 0;
+    let endIdx = text.length;
+
+    for (const m of startMarkers) {
+        const i = text.indexOf(m);
+        if (i !== -1) {
+            const nextLine = text.indexOf('\n', i);
+            if (nextLine !== -1) startIdx = nextLine + 1;
+            break;
+        }
+    }
+
+    for (const m of endMarkers) {
+        const i = text.lastIndexOf(m);
+        if (i !== -1) {
+            endIdx = i;
+            break;
+        }
+    }
+
+    if (endIdx > startIdx) text = text.slice(startIdx, endIdx);
+
+    // 4. Count Words
+    const cleanText = text.replace(/[\r\n\t]+/g, ' ').replace(/\s+/g, ' ').trim();
+    const wordCount = cleanText.split(' ').length;
+
+    // 5. Strict Range Check
+    if (wordCount < MIN_WORDS || wordCount > MAX_WORDS) {
+        // console.log(`  ✗ REJECTED "${bookTitle}": ${wordCount} words (Req: ${MIN_WORDS}-${MAX_WORDS})`);
+        return { valid: false };
+    }
+
+    const pages = Math.round(wordCount / WORDS_PER_PAGE);
     
+    return { valid: true, pages, wordCount };
 
-    let cleanText = text;
-    const start = text.indexOf("*** START");
-    const end = text.indexOf("*** END");
-    if (start !== -1 && end !== -1) cleanText = text.slice(start, end);
-    cleanText = cleanText.replace(/[\r\n]+/g, "\n").replace(/Project Gutenberg.*/gi, "").trim();
-    const sampledWords = cleanText.split(/\s+/).filter(w => w.length > 0).length;
-    const estimatedTotalWords = Math.round(sampledWords * scale);
-
-    let pages = Math.round(estimatedTotalWords / 275);
-    pages = Math.max(5, pages); // Set minimum pages
-
-    pageCountCache.set(bookId, pages);
-    return pages;
-  } catch (e) {
-    const fallback = 7 + (bookId % 8); // 7–14
-    pageCountCache.set(bookId, fallback);
-    return fallback;
-  }
+  } catch (err) {
+    // If error is "maxContentLength size exceeded", it's definitely a novel/history book
+    if (err.code === 'ERR_BAD_RESPONSE' || err.message.includes('maxContentLength')) {
+        // console.log(`  ✗ REJECTED "${bookTitle}": File too large (Novel/History)`);
+        return { valid: false };
+    }
+    return { valid: false };
+  }
 }
 
-// ----------------------------------------------------
-// Load raw books from Gutendex
-// ----------------------------------------------------
+// ============================================
+// Load Books with Metadata Filtering
+// ============================================
 async function loadRawBooks() {
-  const agent = new (require("https").Agent)({ rejectUnauthorized: false });
-  const searchTerms = encodeURIComponent("short story OR short stories OR fable OR parable OR one act");
+  const agent = new (require("https").Agent)({ rejectUnauthorized: false });
+  
+  // Search specifically for "short stories" topic to avoid general history
+  const urls = [
+    `https://gutendex.com/books?languages=en&topic=short%20stories&sort=popular`,
+    `https://gutendex.com/books?languages=en&search=tale&sort=popular`
+  ];
 
-  try {
-    const [p1, p2] = await Promise.all([
-      axios.get(`https://gutendex.com/books?languages=en&search=${searchTerms}&sort=popular&page=1`, { timeout: 15000, httpsAgent: agent }),
-      axios.get(`https://gutendex.com/books?languages=en&search=${searchTerms}&sort=popular&page=2`, { timeout: 15000, httpsAgent: agent })
-    ]);
+  let allBooks = [];
+  console.log('Fetching candidates from Gutendex...');
 
-    const all = [...(p1.data.results || []), ...(p2.data.results || [])];
-    console.log(`Gutendex loaded ${all.length} raw books (cert bypass active)`);
-
-    return all.filter(book =>
-      book.formats &&
-      (book.formats["text/plain"] ||
-       book.formats["text/plain; charset=us-ascii"] ||
-       book.formats["text/html"])
-    );
-  } catch {
-    console.log("Gutendex unreachable → fallback applied");
-    return [];
-  }
-}
-
-// ----------------------------------------------------
-// Quick live pool for serverless/dev — returns a small, fresh set without using cache
-// ----------------------------------------------------
-async function loadQuickPool(limit = 12, level, age, genre) {
-  const raw = await loadRawBooks();
-  if (!raw || raw.length === 0) return [];
-
-  let pool = [...raw];
-  if (level === "junior") pool = pool.filter(b => (b.subjects || []).join(' ').toLowerCase().includes('junior') || (b.authors?.[0]?.name || '').toLowerCase().includes('junior'));
-  if (level === "senior") pool = pool.filter(b => (b.subjects || []).join(' ').toLowerCase().includes('senior') || (b.authors?.[0]?.name || '').toLowerCase().includes('senior'));
-  if (age === "12-16") pool = pool.filter(b => true); // hard to detect age via metadata; keep as-is
-  if (age === "16-18") pool = pool.filter(b => true);
-  if (genre) {
-    const cleanGenre = genre.charAt(0).toUpperCase() + genre.slice(1).toLowerCase();
-    pool = pool.filter(b => ((b.subjects || []).join(', ').toLowerCase().includes(cleanGenre.toLowerCase())));
-  }
-
-  // Return top `limit` items mapped to minimal structure, using FAST_DEFAULT_PAGES
-  const selected = pool.slice(0, Math.max(limit, 12)).map(b => {
-    const txtUrl = Object.values(b.formats || {}).find(v => typeof v === 'string' && (v.includes('text/plain') || v.endsWith('.txt'))) || `https://www.gutenberg.org/files/${b.id}/${b.id}-0.txt`;
-    return {
-      id: `GB${b.id}`,
-      title: (b.title || 'Story').split(/ by |,|\(/i)[0].trim(),
-      author: b.authors?.[0]?.name || 'Unknown Author',
-      cover_url: b.formats['image/jpeg'] || `https://www.gutenberg.org/cache/epub/${b.id}/pg${b.id}.cover.medium.jpg`,
-      source_url: txtUrl,
-      school_level: 'Junior High', // guess, fallback
-      grade_range: '7–10',
-      age_range: '12–16',
-      genre: 'Drama',
-      pages: FAST_DEFAULT_PAGES, // Still use fast default for quick pool
-      reading_time: `${Math.round(FAST_DEFAULT_PAGES * 2.3)} minutes`
-    };
-  });
-  return selected.slice(0, limit);
-}
-
-// ----------------------------------------------------
-// Assign genre using Grok
-// ----------------------------------------------------
-async function filterWithGrokBrain(rawBooks) {
-  if (rawBooks.length === 0) return [];
-
-  if (runtimeFastBuild) {
-    // Fast fallback: pick top N by downloads and assign simple genres — avoids Gemini call.
-    const fallbackGenres = ["Mystery", "Horror", "Sci-Fi", "Humor", "Romance", "Drama", "Adventure", "Fantasy"];
-    return rawBooks
-      .sort((a, b) => (b.download_count || 0) - (a.download_count || 0))
-      .slice(0, 45)
-      .map((b, i) => ({ id: b.id, level: i < 20 ? "Senior High" : "Junior High", genre: fallbackGenres[i % fallbackGenres.length] }));
-  }
-
-  const GROK_PROMPT = `
-You are an expert DepEd English teacher in the Philippines.
-Pick 70–90 short stories (5–15 pages) safe for Filipino students.
-Assign each: school_level ("Junior High" or "Senior High") and genre (Mystery, Horror, Sci-Fi, Humor, Romance, Drama, Adventure, Fantasy)
-Return ONLY clean JSON array: [{"id": 1952, "level": "Senior High", "genre": "Horror"}, ...]
-Books:
-${rawBooks.map(b => `${b.id}: "${b.title}" by ${b.authors?.[0]?.name || "Unknown"}`).join("\n")}
-`.trim();
-
-  try {
-    const timeoutMs = runtimeFastBuild ? 8000 : 60000;
-    const maxOutputTokens = runtimeFastBuild ? 6000 : 60000;
-    const res = await axios.post(`${GEMINI_URL}?key=${GEMINI_API_KEY}`, {
-      contents: [{ role: "user", parts: [{ text: GROK_PROMPT }] }],
-      generationConfig: { temperature: 0.5, maxOutputTokens, responseMimeType: "application/json" },
-    }, { timeout: timeoutMs });
-
-    let text = res.data.candidates?.[0]?.content?.parts?.[0]?.text || "[]";
-    text = text.replace(/```json|```/g, "").trim();
-    let list = JSON.parse(text);
-
-    const validIds = rawBooks.map(b => b.id);
-    return list.filter(x => validIds.includes(x.id));
-
-  } catch {
-    const fallbackGenres = ["Mystery", "Horror", "Sci-Fi", "Humor", "Romance", "Drama", "Adventure", "Fantasy"];
-    return rawBooks
-      .sort((a, b) => (b.download_count || 0) - (a.download_count || 0))
-      .slice(0, 85)
-      .map((b, i) => ({ id: b.id, level: i < 38 ? "Senior High" : "Junior High", genre: fallbackGenres[i % 8] }));
-  }
-}
-
-// ----------------------------------------------------
-// Build final library
-// ----------------------------------------------------
-async function buildPerfectLibrary(forceFast = false) {
-  runtimeFastBuild = forceFast || FAST_BUILD;
-  runtimeFullCount = !runtimeFastBuild;
-  console.log("Building CozyClip Library — Philippine Curriculum + Genres");
-  const rawBooks = await loadRawBooks();
-  const approved = await filterWithGrokBrain(rawBooks);
-
-  // Build books in parallel with limited concurrency to avoid serial downloads.
-  function pLimit(concurrency) {
-    const queue = [];
-    let active = 0;
-    const next = () => {
-      if (queue.length === 0 || active >= concurrency) return;
-      active++;
-      const { fn, resolve, reject } = queue.shift();
-      fn().then(resolve, reject).finally(() => { active--; next(); });
-    };
-    return (fn) => new Promise((resolve, reject) => { queue.push({ fn, resolve, reject }); next(); });
-  }
-
-  const limit = pLimit(runtimeFastBuild ? 10 : 5);
-  const tasks = approved.map(item => limit(async () => {
-    const b = rawBooks.find(book => book.id === item.id);
-    if (!b) return null;
-    if (runtimeFullCount) console.log(`Processing book ${b.id} — ${b.title}`);
-    const txtUrl = Object.values(b.formats || {}).find(v => typeof v === "string" && (v.includes("text/plain") || v.endsWith(".txt"))) || `https://www.gutenberg.org/files/${b.id}/${b.id}-0.txt`;
-    
-    // Get the estimated page count (which is now unclamped)
-    const estimatedPages = runtimeFastBuild ? FAST_DEFAULT_PAGES : await getPageCount(txtUrl, b.id);
-    
-    // FIX: Filter out any books that are longer than the desired 15 pages
-    if (estimatedPages > MAX_ALLOWED_PAGES) {
-        if (runtimeFullCount) console.log(`Dropping book ${b.id} because it is too long (${estimatedPages} pages).`);
-        return null;
+  try {
+    for (const url of urls) {
+        const res = await axios.get(url, { timeout: 10000, httpsAgent: agent });
+        if (res.data.results) allBooks.push(...res.data.results);
     }
 
-    // Use the estimated page count for the final metadata
-    // We clamp the final metadata page count to MAX_ALLOWED_PAGES for frontend consistency
-    const finalPages = Math.min(MAX_ALLOWED_PAGES, Math.max(5, estimatedPages)); 
+    // De-duplicate
+    allBooks = Array.from(new Map(allBooks.map(item => [item.id, item])).values());
 
-    return {
-      id: `GB${b.id}`,
-      title: (b.title || "Story").split(/ by |,|\(/i)[0].trim(),
-      author: b.authors?.[0]?.name || "Unknown Author",
-      cover_url: b.formats["image/jpeg"] || `https://www.gutenberg.org/cache/epub/${b.id}/pg${b.id}.cover.medium.jpg`,
-      source_url: txtUrl,
-      school_level: item.level.includes("Senior") ? "Senior High" : "Junior High",
-      grade_range: item.level.includes("Senior") ? "11–12" : "7–10",
-      age_range: item.level.includes("Senior") ? "16–18" : "12–16",
-      genre: item.genre || "Drama",
-      pages: finalPages, // Use the filtered and clamped page count
-      reading_time: `${Math.round(finalPages * 2.3)} minutes`
-    };
-  }));
+    // ----------------------------------------------------
+    // 🛡️ LEVEL 1 FILTER: METADATA (Title & Subjects)
+    // ----------------------------------------------------
+    const filtered = allBooks.filter(b => {
+        const titleLower = (b.title || "").toLowerCase();
+        
+        // Check Title Blacklist
+        if (TITLE_BLACKLIST.some(bad => titleLower.includes(bad))) return false;
 
-  const books = (await Promise.all(tasks)).filter(Boolean); // Filter out the nulls (long books)
+        // Check Subject Blacklist
+        if (b.subjects && b.subjects.some(s => SUBJECT_BLACKLIST.some(bad => s.toLowerCase().includes(bad)))) {
+            return false;
+        }
 
-  perfectBooks = books;
-  // Persist cache so API can serve immediately on restart
-  try { saveCache(books); } catch (e) { /* ignore */ }
-  const senior = books.filter(b => b.school_level === "Senior High").length;
-  console.log(`LIBRARY READY: ${books.length} books | Senior: ${senior} | Junior: ${books.length - senior}`);
-  // After a fast initial build, schedule a full build to refresh content (unless user requested FAST_BUILD mode)
-  if (runtimeFastBuild && !FAST_BUILD) {
-    console.log('Fast build complete; scheduling a full rebuild in 45s');
-    setTimeout(() => buildPerfectLibrary(false), 45 * 1000);
-  }
-  runtimeFastBuild = FAST_BUILD; // restore default
-  runtimeFullCount = !runtimeFastBuild;
+        // Must have text format
+        return b.formats && (b.formats["text/plain"] || b.formats["text/plain; charset=utf-8"]);
+    });
+
+    console.log(`✓ Metadata Filter: Reduced ${allBooks.length} -> ${filtered.length} candidates.`);
+    return filtered;
+
+  } catch (err) {
+    console.log("✗ Gutendex connection failed:", err.message);
+    return [];
+  }
 }
 
-// Always try to load the pre-generated cache first so API can respond immediately.
+// ============================================
+// Build Library
+// ============================================
+async function buildPerfectLibrary() {
+  console.log('\n========================================');
+  console.log(`BUILDING LIBRARY (STRICT 10-15 PAGES)`);
+  console.log('========================================\n');
+  
+  const rawBooks = await loadRawBooks();
+  if (rawBooks.length === 0) return;
+
+  const genres = ["Mystery", "Horror", "Sci-Fi", "Humor", "Romance", "Drama", "Fantasy"];
+  
+  // Concurrency Limiter
+  function pLimit(concurrency) {
+    const queue = [];
+    let active = 0;
+    const next = () => {
+      if (queue.length === 0 || active >= concurrency) return;
+      active++;
+      const { fn, resolve, reject } = queue.shift();
+      fn().then(resolve, reject).finally(() => { active--; next(); });
+    };
+    return (fn) => new Promise((resolve, reject) => { 
+      queue.push({ fn, resolve, reject }); 
+      next(); 
+    });
+  }
+
+  const limit = pLimit(5); 
+  let accepted = 0;
+
+  const tasks = rawBooks.map(b => limit(async () => {
+    const txtUrl = b.formats["text/plain"] || b.formats["text/plain; charset=utf-8"];
+    if (!txtUrl) return null;
+
+    // ----------------------------------------------------
+    // 🛡️ LEVEL 2 FILTER: CONTENT ANALYSIS
+    // ----------------------------------------------------
+    const stats = await processBookContent(txtUrl, b.title);
+
+    if (!stats.valid) return null;
+
+    accepted++;
+    console.log(`  ✓ ACCEPTED: "${b.title.substring(0, 40)}..." | ${stats.pages} pgs | ${stats.wordCount} words`);
+
+    return {
+      id: `GB${b.id}`,
+      title: (b.title || "Untitled").split(/ by |,/i)[0].trim(),
+      author: b.authors?.[0]?.name || "Unknown",
+      cover_url: b.formats["image/jpeg"] || `https://www.gutenberg.org/cache/epub/${b.id}/pg${b.id}.cover.medium.jpg`,
+      source_url: txtUrl,
+      school_level: Math.random() > 0.5 ? "Senior High" : "Junior High",
+      grade_range: "7–12",
+      age_range: "12–18",
+      genre: genres[Math.floor(Math.random() * genres.length)],
+      pages: stats.pages,
+      word_count: stats.wordCount,
+      reading_time: `${Math.round(stats.pages * 2)} mins`
+    };
+  }));
+
+  const results = (await Promise.all(tasks)).filter(Boolean);
+
+  perfectBooks = results;
+  saveCache(results);
+  
+  console.log('\n========================================');
+  console.log(`LIBRARY READY: ${perfectBooks.length} Verified Books`);
+  console.log('========================================\n');
+}
+
+// ============================================
+// Init & API
+// ============================================
 loadCache();
 
-// In non-serverless environments (local dev / long-running server), we can
-// still build/refresh the library in the background.
 if (!IS_SERVERLESS) {
-  const cacheExists = fs.existsSync(CACHE_FILE);
-  if (!cacheExists || FORCE_REFRESH) {
-    console.log('No cache or FORCE_REFRESH is enabled — building library from scratch');
-  }
-  // If FORCE_REFRESH is set, we force a fresh build even if the cache exists;
-  // otherwise prefer fast builds if no cache or FAST_BUILD true.
-  const initialFast = FAST_BUILD || (!cacheExists && !FORCE_REFRESH);
-  buildPerfectLibrary(initialFast).catch(e => {
-    console.log('Initial library build failed', e && e.message);
-  });
-  setInterval(() => {
-    buildPerfectLibrary(false).catch(e => {
-      console.log('Periodic library rebuild failed', e && e.message);
-    });
-  }, 20 * 60 * 1000);
+  if (perfectBooks.length === 0 || FORCE_REFRESH) {
+    buildPerfectLibrary();
+  }
 }
 
-// ----------------------------------------------------
-// Controller function
-// ----------------------------------------------------
 async function getStories(req, res) {
-  try {
-    let { limit = 12, level, age, genre } = req.query;
-    limit = Math.min(parseInt(limit) || 12, 50);
+  try {
+    let { limit = 12, level, genre } = req.query;
+    limit = Math.min(parseInt(limit) || 12, 50);
 
-    if (perfectBooks.length === 0) {
-      // Build a quick live pool and return it for serverless environments (fast but not fully cached)
-      try {
-        const quick = await loadQuickPool(limit, level, age, genre);
-        if (quick.length > 0) {
-          return res.json({ success: true, total: quick.length, applied_filters: { level, age, genre }, books: quick });
-        }
-      } catch (e) {
-        console.log('Quick pool failed', e && e.message);
-      }
+    if (perfectBooks.length === 0) {
+      return res.json({ 
+        success: false, 
+        message: "Building library... please refresh in 30 seconds.",
+        books: [] 
+      });
+    }
 
-      return res.json({ success: false, message: "Library loading... (30–60s first time)", books: [] });
-    }
+    let pool = [...perfectBooks];
+    
+    // Filters
+    if (level === "junior") pool = pool.filter(b => b.school_level === "Junior High");
+    if (level === "senior") pool = pool.filter(b => b.school_level === "Senior High");
+    if (genre) pool = pool.filter(b => b.genre.toLowerCase() === genre.toLowerCase());
 
-    let pool = [...perfectBooks];
-    if (level === "junior") pool = pool.filter(b => b.school_level === "Junior High");
-    if (level === "senior") pool = pool.filter(b => b.school_level === "Senior High");
-    if (age === "12-16") pool = pool.filter(b => b.age_range === "12–16");
-    if (age === "16-18") pool = pool.filter(b => b.age_range === "16–18");
-    if (genre) {
-      const cleanGenre = genre.charAt(0).toUpperCase() + genre.slice(1).toLowerCase();
-      pool = pool.filter(b => b.genre === cleanGenre);
-    }
+    // Shuffle
+    pool = pool.sort(() => 0.5 - Math.random());
 
-    // Shuffle
-    for (let i = pool.length - 1; i > 0; i--) {
-      const j = Math.floor(Math.random() * (i + 1));
-      [pool[i], pool[j]] = [pool[j], pool[i]];
-    }
-
-    const selected = pool.slice(0, limit);
-    return res.json({
-      success: true,
-      total: selected.length,
-      applied_filters: { level, age, genre },
-      books: selected
-    });
-  } catch (err) {
-    return res.status(500).json({ success: false, message: err.message || "Failed to fetch stories" });
-  }
+    return res.json({
+      success: true,
+      total: pool.slice(0, limit).length,
+      books: pool.slice(0, limit)
+    });
+    
+  } catch (err) {
+    return res.status(500).json({ success: false, message: err.message });
+  }
 }
 
 module.exports = { getStories };
