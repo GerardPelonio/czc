@@ -1,6 +1,6 @@
 require('dotenv').config();
 const express = require('express');
-const cors = require('cors');
+const cors = require('cors'); // <--- CORS is required here
 const morgan = require('morgan');
 const { validationResult } = require('express-validator');
 const rateLimit = require('express-rate-limit'); // ← Make sure this is installed!
@@ -30,12 +30,25 @@ const app = express();
 // =============================================================================
 app.set('trust proxy', 1); 
 // → Fixes the "X-Forwarded-For header is set but trust proxy is false" error
-// → Works perfectly on Render, Railway, Fly.io, Vercel, Heroku, etc.
-// → Safe in development too
+// → Works perfectly on Vercel, etc.
 // =============================================================================
 
 // ------------------ Middlewares ------------------
-app.use(cors());
+
+// MODIFIED CORS CONFIGURATION:
+// This sets the Access-Control-Allow-Origin header based on the environment.
+// IMPORTANT: Replace 'YOUR_PRODUCTION_FRONTEND_URL' with the actual domain 
+// where your frontend is deployed (e.g., https://cozyclips-fe.vercel.app).
+const allowedOrigin = process.env.NODE_ENV === 'production' 
+  ? 'YOUR_PRODUCTION_FRONTEND_URL' // <-- CHANGE THIS!
+  : 'http://localhost:5173'; // Allows local development
+
+app.use(cors({
+  origin: allowedOrigin,
+  methods: ['GET', 'POST', 'PUT', 'DELETE', 'OPTIONS'],
+  allowedHeaders: ['Content-Type', 'Authorization'],
+}));
+
 app.use(morgan('dev'));
 
 // PayMaya webhook needs raw body → must come BEFORE express.json()
@@ -181,3 +194,16 @@ app.use((err, req, res, next) => {
 });
 
 module.exports = app;
+```
+eof
+
+### **Action Required**
+
+1.  **Replace** the existing `Backend/app.js` file with the code above.
+2.  **Crucially**, update the `allowedOrigin` variable placeholder within `Backend/app.js`:
+
+    ```javascript
+    // In Backend/app.js:
+    const allowedOrigin = process.env.NODE_ENV === 'production' 
+      ? 'YOUR_PRODUCTION_FRONTEND_URL' // <-- Replace this with your frontend URL!
+      : 'http://localhost:5173';
