@@ -3,22 +3,20 @@ const fs = require('fs');
 const path = require('path');
 
 // ============================================
-// CONFIGURATION: STRICT 10-15 PAGES
+// CONFIGURATION
 // ============================================
 const MIN_PAGES = 10;
 const MAX_PAGES = 15;
 const WORDS_PER_PAGE = 250; 
 const MIN_WORDS = 2500;
-const MAX_WORDS = 4500; // Hard cap
+const MAX_WORDS = 4500; 
 
-// Blacklisted words in TITLES (Case insensitive)
 const TITLE_BLACKLIST = [
   "history", "vol", "volume", "index", "dictionary", 
   "encyclopedia", "collected", "complete", "works", 
   "memoirs", "biography", "letters", "report", "manual"
 ];
 
-// Blacklisted words in SUBJECTS
 const SUBJECT_BLACKLIST = [
   "history", "biography", "periodicals", "politics", 
   "reference", "instructional"
@@ -26,11 +24,13 @@ const SUBJECT_BLACKLIST = [
 
 const CACHE_FILE = path.join(__dirname, '..', 'data', 'perfect-books-cache.json');
 const IS_SERVERLESS = !!process.env.VERCEL || process.env.SERVERLESS || process.env.NODE_ENV === 'production';
-const FORCE_REFRESH = (process.env.FORCE_REFRESH === '1' || process.env.FORCE_REFRESH === 'true');
 
 let perfectBooks = [];
 
-// [Load/Save Cache functions remain standard]
+// ============================================
+// HELPERS
+// ============================================
+
 function loadCache() {
   const candidates = [
     CACHE_FILE, 
@@ -52,6 +52,8 @@ function loadCache() {
 }
 
 function saveCache(books) {
+  // In Vercel (Serverless), we cannot save to disk permanently, 
+  // but we try anyway for local development.
   if (IS_SERVERLESS) return;
   try {
     const dir = path.dirname(CACHE_FILE);
@@ -62,45 +64,32 @@ function saveCache(books) {
   }
 }
 
-// ============================================
-// CRITICAL: ACCURATE PAGE COUNTING & FILTERING
-// ============================================
 async function processBookContent(textUrl, bookTitle) {
   try {
-    // 1. Download Content
-    // We set a max content length. If it exceeds this, it's definitely too big.
-    // 15 pages * 250 words * ~6 chars/word = ~22KB. 
-    // We allow 60KB to be safe for metadata/license.
-    const MAX_SIZE_BYTES = 60 * 1024; 
-
+    const MAX_SIZE_BYTES = 60 * 1024; // 60KB limit
     const response = await axios.get(textUrl, { 
       timeout: 8000,
-      maxContentLength: MAX_SIZE_BYTES, // Will throw error if larger
+      maxContentLength: MAX_SIZE_BYTES, 
       validateStatus: (status) => status === 200
     });
 
     let text = response.data || '';
 
-    // 2. Structure Check (The "History Book" Detector)
-    // If we find "Chapter 20" or "Index", it's a long book, even if the file is small.
     const structureChecks = [
-        /Chapter\s+(?:XX|20)/i,  // Chapter 20+
-        /Index\s*$/i,            // Ends with Index
-        /Bibliography/i,         // Academic book
-        /Table of Contents/i     // Usually implies a long collection
+        /Chapter\s+(?:XX|20)/i, 
+        /Index\s*$/i,           
+        /Bibliography/i,        
+        /Table of Contents/i    
     ];
 
     for (const check of structureChecks) {
         if (check.test(text.substring(0, 5000)) || check.test(text.substring(text.length - 5000))) {
-            // console.log(`  ✗ REJECTED "${bookTitle}": Found structure marker (Index/Chapter XX)`);
             return { valid: false };
         }
     }
 
-    // 3. Strip Gutenberg Headers
     const startMarkers = ["*** START", "START OF THIS PROJECT", "Produced by"];
     const endMarkers = ["*** END", "End of the Project", "End of Project"];
-
     let startIdx = 0;
     let endIdx = text.length;
 
@@ -123,37 +112,23 @@ async function processBookContent(textUrl, bookTitle) {
 
     if (endIdx > startIdx) text = text.slice(startIdx, endIdx);
 
-    // 4. Count Words
     const cleanText = text.replace(/[\r\n\t]+/g, ' ').replace(/\s+/g, ' ').trim();
     const wordCount = cleanText.split(' ').length;
 
-    // 5. Strict Range Check
     if (wordCount < MIN_WORDS || wordCount > MAX_WORDS) {
-        // console.log(`  ✗ REJECTED "${bookTitle}": ${wordCount} words (Req: ${MIN_WORDS}-${MAX_WORDS})`);
         return { valid: false };
     }
 
     const pages = Math.round(wordCount / WORDS_PER_PAGE);
-    
     return { valid: true, pages, wordCount };
 
   } catch (err) {
-    // If error is "maxContentLength size exceeded", it's definitely a novel/history book
-    if (err.code === 'ERR_BAD_RESPONSE' || err.message.includes('maxContentLength')) {
-        // console.log(`  ✗ REJECTED "${bookTitle}": File too large (Novel/History)`);
-        return { valid: false };
-    }
     return { valid: false };
   }
 }
 
-// ============================================
-// Load Books with Metadata Filtering
-// ============================================
 async function loadRawBooks() {
   const agent = new (require("https").Agent)({ rejectUnauthorized: false });
-  
-  // Search specifically for "short stories" topic to avoid general history
   const urls = [
     `https://gutendex.com/books?languages=en&topic=short%20stories&sort=popular`,
     `https://gutendex.com/books?languages=en&search=tale&sort=popular`
@@ -167,51 +142,28 @@ async function loadRawBooks() {
         const res = await axios.get(url, { timeout: 10000, httpsAgent: agent });
         if (res.data.results) allBooks.push(...res.data.results);
     }
-
-    // De-duplicate
     allBooks = Array.from(new Map(allBooks.map(item => [item.id, item])).values());
 
-    // ----------------------------------------------------
-    // 🛡️ LEVEL 1 FILTER: METADATA (Title & Subjects)
-    // ----------------------------------------------------
-    const filtered = allBooks.filter(b => {
+    return allBooks.filter(b => {
         const titleLower = (b.title || "").toLowerCase();
-        
-        // Check Title Blacklist
         if (TITLE_BLACKLIST.some(bad => titleLower.includes(bad))) return false;
-
-        // Check Subject Blacklist
-        if (b.subjects && b.subjects.some(s => SUBJECT_BLACKLIST.some(bad => s.toLowerCase().includes(bad)))) {
-            return false;
-        }
-
-        // Must have text format
+        if (b.subjects && b.subjects.some(s => SUBJECT_BLACKLIST.some(bad => s.toLowerCase().includes(bad)))) return false;
         return b.formats && (b.formats["text/plain"] || b.formats["text/plain; charset=utf-8"]);
     });
-
-    console.log(`✓ Metadata Filter: Reduced ${allBooks.length} -> ${filtered.length} candidates.`);
-    return filtered;
-
   } catch (err) {
     console.log("✗ Gutendex connection failed:", err.message);
     return [];
   }
 }
 
-// ============================================
-// Build Library
-// ============================================
 async function buildPerfectLibrary() {
-  console.log('\n========================================');
-  console.log(`BUILDING LIBRARY (STRICT 10-15 PAGES)`);
-  console.log('========================================\n');
-  
+  console.log('--- Building Library (On-Demand) ---');
   const rawBooks = await loadRawBooks();
   if (rawBooks.length === 0) return;
 
   const genres = ["Mystery", "Horror", "Sci-Fi", "Humor", "Romance", "Drama", "Fantasy"];
   
-  // Concurrency Limiter
+  // Simple concurrency limiter
   function pLimit(concurrency) {
     const queue = [];
     let active = 0;
@@ -228,21 +180,13 @@ async function buildPerfectLibrary() {
   }
 
   const limit = pLimit(5); 
-  let accepted = 0;
 
   const tasks = rawBooks.map(b => limit(async () => {
     const txtUrl = b.formats["text/plain"] || b.formats["text/plain; charset=utf-8"];
     if (!txtUrl) return null;
 
-    // ----------------------------------------------------
-    // 🛡️ LEVEL 2 FILTER: CONTENT ANALYSIS
-    // ----------------------------------------------------
     const stats = await processBookContent(txtUrl, b.title);
-
     if (!stats.valid) return null;
-
-    accepted++;
-    console.log(`  ✓ ACCEPTED: "${b.title.substring(0, 40)}..." | ${stats.pages} pgs | ${stats.wordCount} words`);
 
     return {
       id: `GB${b.id}`,
@@ -261,37 +205,42 @@ async function buildPerfectLibrary() {
   }));
 
   const results = (await Promise.all(tasks)).filter(Boolean);
-
   perfectBooks = results;
   saveCache(results);
-  
-  console.log('\n========================================');
-  console.log(`LIBRARY READY: ${perfectBooks.length} Verified Books`);
-  console.log('========================================\n');
+  console.log(`Library Ready: ${perfectBooks.length} books.`);
 }
 
 // ============================================
-// Init & API
+// MAIN CONTROLLER
 // ============================================
+
+// Attempt to load cache on startup, but don't fail if missing
 loadCache();
-
-if (!IS_SERVERLESS) {
-  if (perfectBooks.length === 0 || FORCE_REFRESH) {
-    buildPerfectLibrary();
-  }
-}
 
 async function getStories(req, res) {
   try {
-    let { limit = 12, level, genre } = req.query;
+    // 1. Critical: Disable Vercel/Browser Caching
+    res.setHeader('Cache-Control', 'no-store, no-cache, must-revalidate, proxy-revalidate');
+    res.setHeader('Pragma', 'no-cache');
+    res.setHeader('Expires', '0');
+
+    let { limit = 12, level, genre, refresh } = req.query;
     limit = Math.min(parseInt(limit) || 12, 50);
 
+    // 2. Lazy Loading / Force Refresh Logic
+    // If we have no books in memory OR the user specifically requested a refresh
+    if (perfectBooks.length === 0 || refresh === 'true') {
+        console.log("Cache miss or refresh requested. Building library now...");
+        await buildPerfectLibrary();
+    }
+
+    // 3. Fallback if build fails (e.g. timeout)
     if (perfectBooks.length === 0) {
-      return res.json({ 
-        success: false, 
-        message: "Building library... please refresh in 30 seconds.",
-        books: [] 
-      });
+       return res.status(503).json({ 
+         success: false, 
+         message: "Library is rebuilding. Please try again in 5 seconds.",
+         books: [] 
+       });
     }
 
     let pool = [...perfectBooks];
@@ -311,6 +260,7 @@ async function getStories(req, res) {
     });
     
   } catch (err) {
+    console.error(err);
     return res.status(500).json({ success: false, message: err.message });
   }
 }
