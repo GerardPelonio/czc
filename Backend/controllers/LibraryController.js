@@ -25,6 +25,7 @@ const SUBJECT_BLACKLIST = [
 const CACHE_FILE = path.join(__dirname, '..', 'data', 'perfect-books-cache.json');
 const IS_SERVERLESS = !!process.env.VERCEL || process.env.SERVERLESS || process.env.NODE_ENV === 'production';
 
+// In-memory storage (persists while Vercel function is warm)
 let perfectBooks = [];
 
 // ============================================
@@ -52,8 +53,7 @@ function loadCache() {
 }
 
 function saveCache(books) {
-  // In Vercel (Serverless), we cannot save to disk permanently, 
-  // but we try anyway for local development.
+  // On Vercel, we cannot save to disk permanently.
   if (IS_SERVERLESS) return;
   try {
     const dir = path.dirname(CACHE_FILE);
@@ -163,7 +163,6 @@ async function buildPerfectLibrary() {
 
   const genres = ["Mystery", "Horror", "Sci-Fi", "Humor", "Romance", "Drama", "Fantasy"];
   
-  // Simple concurrency limiter
   function pLimit(concurrency) {
     const queue = [];
     let active = 0;
@@ -214,12 +213,26 @@ async function buildPerfectLibrary() {
 // MAIN CONTROLLER
 // ============================================
 
-// Attempt to load cache on startup, but don't fail if missing
+// Attempt load on startup
 loadCache();
 
 async function getStories(req, res) {
   try {
-    // 1. Critical: Disable Vercel/Browser Caching
+    // 1. CORS CONFIGURATION (Crucial for Vercel/Frontend communication)
+    res.setHeader('Access-Control-Allow-Credentials', true);
+    res.setHeader('Access-Control-Allow-Origin', '*'); 
+    res.setHeader('Access-Control-Allow-Methods', 'GET,OPTIONS,PATCH,DELETE,POST,PUT');
+    res.setHeader(
+      'Access-Control-Allow-Headers',
+      'X-CSRF-Token, X-Requested-With, Accept, Accept-Version, Content-Length, Content-MD5, Content-Type, Date, X-Api-Version, Cache-Control, Pragma'
+    );
+
+    // Handle Preflight Request
+    if (req.method === 'OPTIONS') {
+      return res.status(200).end();
+    }
+
+    // 2. Disable Caching
     res.setHeader('Cache-Control', 'no-store, no-cache, must-revalidate, proxy-revalidate');
     res.setHeader('Pragma', 'no-cache');
     res.setHeader('Expires', '0');
@@ -227,14 +240,13 @@ async function getStories(req, res) {
     let { limit = 12, level, genre, refresh } = req.query;
     limit = Math.min(parseInt(limit) || 12, 50);
 
-    // 2. Lazy Loading / Force Refresh Logic
-    // If we have no books in memory OR the user specifically requested a refresh
+    // 3. Lazy Loading / Force Refresh Logic
     if (perfectBooks.length === 0 || refresh === 'true') {
         console.log("Cache miss or refresh requested. Building library now...");
         await buildPerfectLibrary();
     }
 
-    // 3. Fallback if build fails (e.g. timeout)
+    // 4. Fallback if build fails
     if (perfectBooks.length === 0) {
        return res.status(503).json({ 
          success: false, 
@@ -245,12 +257,10 @@ async function getStories(req, res) {
 
     let pool = [...perfectBooks];
     
-    // Filters
     if (level === "junior") pool = pool.filter(b => b.school_level === "Junior High");
     if (level === "senior") pool = pool.filter(b => b.school_level === "Senior High");
     if (genre) pool = pool.filter(b => b.genre.toLowerCase() === genre.toLowerCase());
 
-    // Shuffle
     pool = pool.sort(() => 0.5 - Math.random());
 
     return res.json({
