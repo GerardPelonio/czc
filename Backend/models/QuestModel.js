@@ -1,38 +1,66 @@
-const COLLECTION = 'quests';
+// Backend/models/QuestModel.js
 
-const questSchema = {
-  questId: { type: 'string', required: true, unique: true },
-  title: { type: 'string', required: true },
-  description: { type: 'string', required: false },
-  trigger: { type: 'string', required: true }, // event type that triggers the quest
-  target: { type: 'number', required: true }, // number of times to complete (or misspelled targer)
-  rewardCoins: { type: 'number', required: true },
-  createdAt: { type: 'timestamp', default: null },
-  updatedAt: { type: 'timestamp', default: null },
-  // ADDED: Fields necessary for complex/repeatable quests
-  timeWindow: { type: 'string', required: false }, // e.g., 'weekly', 'monthly', 'session'
-  uniqueStories: { type: 'boolean', default: false }, // Flag for tracking unique stories
-  genresRequired: { type: 'array', items: { type: 'string' }, default: [] }, // For 'Genre Adventurer'
+const getDb = require('../utils/getDb');
+
+// --- Mock Firestore Structures (Replace with real logic) ---
+// For a real application, Quest definitions should be in a global 'quests' collection, 
+// and user progress would be in a 'users/{uid}/quest_progress' subcollection.
+
+const MOCK_USER_PROGRESS = {
+    // Key: Quest ID (must match global quest definition IDs)
+    '0': { currentProgress: 1, isClaimed: false, lastUpdate: new Date() },
+    '1': { currentProgress: 3, isClaimed: false, lastUpdate: new Date() },
+    '2': { currentProgress: 3, isClaimed: true, lastUpdate: new Date() },
+    '3': { currentProgress: 0, isClaimed: false, lastUpdate: new Date() },
 };
 
-const studentQuestSchema = {
-  userId: { type: 'string', required: true },
-  quests: {
-    type: 'array',
-    items: {
-      questId: { type: 'string', required: true },
-      progress: { type: 'number', default: 0 },
-      completed: { type: 'boolean', default: false },
-      // FIX: Add missing fields written by QuestService
-      updatedAt: { type: 'timestamp', default: null },
-      completedAt: { type: 'timestamp', default: null },
-      storyIds: { type: 'array', items: { type: 'string' }, default: [] },
-      chapters: { type: 'array', items: { type: 'string' }, default: [] },
-    },
-  },
-  coins: { type: 'number', default: 0 },
-  totalCoinsEarned: { type: 'number', default: 0 },
-  updatedAt: { type: 'timestamp', default: null },
-};
+/**
+ * Fetches the user's current progress for all quests from Firestore.
+ * @param {string} userId - The UID of the authenticated user.
+ * @returns {Promise<Object>} An object mapping quest IDs to progress data.
+ */
+async function getUserQuestProgress(userId) {
+    try {
+        // --- REAL FIREBASE LOGIC HERE ---
+        // const db = await getDb();
+        // const progressRef = db.collection('users').doc(userId).collection('quest_progress');
+        // const snapshot = await progressRef.get();
+        // ... map snapshot to an object like MOCK_USER_PROGRESS
+        
+        // For demonstration, we use the mock data. 
+        // In a real app, you'd fetch user-specific data.
+        return MOCK_USER_PROGRESS;
 
-module.exports = { COLLECTION, questSchema, studentQuestSchema };
+    } catch (error) {
+        console.error("Error fetching user quest progress:", error.message);
+        // Fallback to empty progress if Firestore fails
+        return {}; 
+    }
+}
+
+/**
+ * Marks a quest as claimed in Firestore.
+ * @param {string} userId 
+ * @param {string} questId 
+ */
+async function markQuestAsClaimed(userId, questId) {
+    try {
+        // --- REAL FIREBASE LOGIC HERE ---
+        // const db = await getDb();
+        // const progressDocRef = db.collection('users').doc(userId).collection('quest_progress').doc(questId);
+        // await progressDocRef.update({ isClaimed: true, claimedAt: new Date() });
+        
+        console.log(`[Firestore] Quest ${questId} marked as claimed for user ${userId}`);
+        
+        return true;
+    } catch (error) {
+        console.error(`Error claiming quest ${questId}:`, error.message);
+        throw new Error("Failed to claim quest reward.");
+    }
+}
+
+
+module.exports = {
+    getUserQuestProgress,
+    markQuestAsClaimed
+};
