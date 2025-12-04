@@ -1,15 +1,15 @@
 // Backend/models/QuestModel.js
 
-const getDb = require('../utils/getDb');
+// NO getDb IMPORT HERE - We use dependency injection
 
-/**
- * Fetches the user's current progress for all quests from Firestore.
- * @param {string} userId - The UID of the authenticated user.
- * @returns {Promise<Object>} An object mapping quest IDs to progress data.
- */
-async function getUserQuestProgress(userId) {
+async function getUserQuestProgress(db, userId) {
+    // Safety check
+    if (!db) {
+        console.error("QuestModel: DB instance is missing/null.");
+        return {}; 
+    }
+
     try {
-        const db = await getDb();
         const progressRef = db.collection('users').doc(userId).collection('quest_progress');
         const snapshot = await progressRef.get();
 
@@ -30,13 +30,9 @@ async function getUserQuestProgress(userId) {
     }
 }
 
-/**
- * Marks a quest as claimed in Firestore.
- * @param {string} userId 
- * @param {string} questId 
- */
-async function markQuestAsClaimed(userId, questId) {
-    const db = await getDb();
+async function markQuestAsClaimed(db, userId, questId) {
+    if (!db) throw new Error("Database connection missing for write operation.");
+    
     const progressDocRef = db.collection('users').doc(userId).collection('quest_progress').doc(questId);
     
     await progressDocRef.set({ 
@@ -47,8 +43,7 @@ async function markQuestAsClaimed(userId, questId) {
     return true;
 }
 
-
 module.exports = {
     getUserQuestProgress,
     markQuestAsClaimed
-};
+};  
