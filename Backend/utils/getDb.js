@@ -6,23 +6,23 @@ let defaultApp = null; // Store the initialized app instance
 
 function getDb() {
   try {
-    // Check if a default app has already been initialized (FIX)
-    if (defaultApp) {
-      return defaultApp.firestore();
-    }
-    
-    // Fallback/test logic check
-    if (process && process.env && process.env.NODE_ENV === 'test') {
-      if (firebase && typeof firebase.firestore === 'function') return firebase.firestore();
-    }
-
-    // Check if an app exists in the global array (e.g., if initialized elsewhere)
+    // 1. Check if an app already exists in the global array (initialized by server.js or elsewhere)
     if (firebase.apps && firebase.apps.length) {
       defaultApp = firebase.apps[0];
       return defaultApp.firestore();
     }
+    
+    // 2. Check if a default app has already been initialized (FIX)
+    if (defaultApp) {
+      return defaultApp.firestore();
+    }
 
-    // Attempt to initialize Firebase lazily using env vars
+    // Fallback/test logic check (can be skipped if 1 is thorough, but kept for safety)
+    if (process && process.env && process.env.NODE_ENV === 'test') {
+      if (firebase && typeof firebase.firestore === 'function') return firebase.firestore();
+    }
+
+    // 3. Attempt to initialize Firebase lazily using env vars
     const hasServiceAccountJson = !!process.env.FIREBASE_SERVICE_ACCOUNT_JSON;
     const hasExplicitCreds = !!(process.env.FIREBASE_PROJECT_ID && process.env.FIREBASE_CLIENT_EMAIL && process.env.FIREBASE_PRIVATE_KEY);
     const hasEmulator = !!process.env.FIRESTORE_EMULATOR_HOST || !!process.env.FIREBASE_EMULATOR_HOST;
@@ -45,11 +45,11 @@ function getDb() {
           options.projectId = process.env.FIREBASE_PROJECT_ID || process.env.GCLOUD_PROJECT || 'demo-project';
         }
 
+        // Initialize and set defaultApp
         defaultApp = firebase.initializeApp(options);
         return defaultApp.firestore();
         
       } catch (e) {
-        // Log the failure but return null, preventing the application from crashing.
         console.error('getDb: FATAL Firebase Initialization Failed:', e.message);
         return null; 
       }
