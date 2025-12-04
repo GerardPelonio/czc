@@ -263,8 +263,19 @@ async function getStories(req, res) {
        });
     }
 
-    let pool = [...perfectBooks];
+    // =========================================================
+    // 5. FILTER: Ensure content is strictly READABLE
+    // =========================================================
+    let pool = perfectBooks.filter(b => {
+        // Must have content property
+        if (!b.content) return false;
+        // Content must be a string and have substantial length (avoid empty files)
+        if (typeof b.content !== 'string' || b.content.trim().length < 100) return false;
+        
+        return true;
+    });
     
+    // Filters for Query Params
     if (level === "junior") pool = pool.filter(b => b.school_level === "Junior High");
     if (level === "senior") pool = pool.filter(b => b.school_level === "Senior High");
     if (genre) pool = pool.filter(b => b.genre.toLowerCase() === genre.toLowerCase());
