@@ -33,11 +33,13 @@ const app = express();
 // =============================================================================
 // DB INITIALIZATION & STORAGE (FIX)
 // =============================================================================
+// Calls getDb() immediately, stabilizing the process before routes load.
 const dbInstance = getDb();
 if (dbInstance) {
   app.locals.db = dbInstance;
   console.log('Firebase initialized and stored on app.locals.db');
 } else {
+  // Logs failure but allows the server to start to return a 503 instead of crashing.
   console.error('FATAL: Could not initialize Firebase/Firestore.');
 }
 // =============================================================================

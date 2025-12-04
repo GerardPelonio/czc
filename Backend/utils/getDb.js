@@ -6,16 +6,15 @@ let defaultApp = null; // Store the initialized app instance
 
 function getDb() {
   try {
-    // Check if a default app has already been initialized
+    // Check if a default app has already been initialized (FIX)
     if (defaultApp) {
       return defaultApp.firestore();
     }
     
-    // --- Existing logic to handle mocks/tests ---
+    // Fallback/test logic check
     if (process && process.env && process.env.NODE_ENV === 'test') {
       if (firebase && typeof firebase.firestore === 'function') return firebase.firestore();
     }
-    // ---------------------------------------------
 
     // Check if an app exists in the global array (e.g., if initialized elsewhere)
     if (firebase.apps && firebase.apps.length) {
@@ -50,6 +49,7 @@ function getDb() {
         return defaultApp.firestore();
         
       } catch (e) {
+        // Log the failure but return null, preventing the application from crashing.
         console.error('getDb: FATAL Firebase Initialization Failed:', e.message);
         return null; 
       }

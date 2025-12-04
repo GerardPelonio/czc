@@ -1,7 +1,7 @@
 // Backend/services/QuestService.js
 
 const QuestModel = require('../models/QuestModel');
-const UserModel = require('../models/userModel'); 
+const { addCoinsToUser } = require('./userService'); 
 
 // Global quest definitions matching the requirements of Challenges.jsx
 const GLOBAL_QUESTS = [
@@ -44,7 +44,7 @@ const GLOBAL_QUESTS = [
         id: '5', 
         title: "Weekend Sprint", 
         description: "Read for 2 hours over the weekend", 
-        targetProgress: 120, 
+        targetProgress: 120, // Minutes
         reward: 40 
     },
     { 
@@ -129,13 +129,13 @@ async function claimQuestReward(userId, questId) {
     // 1. Update Quest Firestore: Mark as claimed
     await QuestModel.markQuestAsClaimed(userId, questId);
 
-    // 2. Update User Coins: Atomically add the reward amount (NEW)
-    const newCoins = await UserModel.addCoinsToUser(userId, quest.reward);
+    // 2. Update User Coins: Call the function exported from userService
+    const newCoins = await addCoinsToUser(userId, quest.reward);
 
     return {
         ...quest,
         status: 'completed',
-        newCoins // Return the new balance to the controller
+        newCoins
     };
 }
 

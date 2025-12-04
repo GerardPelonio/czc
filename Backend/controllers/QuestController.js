@@ -46,13 +46,12 @@ async function completeQuest(req, res) {
     }
 
     try {
-        // Service returns the new coin balance in claimedQuest.newCoins
         const claimedQuest = await QuestService.claimQuestReward(userId, questId);
         
         return res.json({
             success: true,
             message: `Reward claimed for ${claimedQuest.title}. You earned ${claimedQuest.reward} coins!`,
-            newCoins: claimedQuest.newCoins, // <--- NEW FIELD for frontend to update coin display
+            newCoins: claimedQuest.newCoins, 
             quest: claimedQuest
         });
     } catch (error) {

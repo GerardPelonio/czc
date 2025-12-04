@@ -10,13 +10,11 @@ const getDb = require('../utils/getDb');
 async function getUserQuestProgress(userId) {
     try {
         const db = await getDb();
-        // Assuming quest progress is stored in a subcollection: users/{uid}/quest_progress
         const progressRef = db.collection('users').doc(userId).collection('quest_progress');
         const snapshot = await progressRef.get();
 
         const progressMap = {};
         snapshot.forEach(doc => {
-            // Map the Firestore doc to the expected model format
             progressMap[doc.id] = { 
                 currentProgress: doc.data().currentProgress || 0,
                 isClaimed: doc.data().isClaimed || false,
