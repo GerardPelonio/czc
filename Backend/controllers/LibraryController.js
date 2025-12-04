@@ -5,7 +5,8 @@ const path = require('path');
 // ============================================
 // CONFIGURATION
 // ============================================
-const MIN_WORDS = 3000;     // Slightly higher = better quality
+// INCREASED MIN_WORDS to 3200 to filter out more borderline short texts
+const MIN_WORDS = 3200;     
 const MAX_WORDS = 4200;
 const WORDS_PER_PAGE = 250;
 
@@ -131,6 +132,7 @@ async function processBookContent(textUrl, bookTitle) {
     }
 
     // === CLEAN TEXT FOR ANALYSIS ===
+    // Use a simpler clean up for word counting
     const cleanText = text
       .replace(/[\r\n]+/g, ' ')
       .replace(/\s{2,}/g, ' ')
@@ -141,6 +143,7 @@ async function processBookContent(textUrl, bookTitle) {
     const words = cleanText.split(/\s+/).filter(w => w.length > 0);
     const wordCount = words.length;
 
+    // --- STRONGER WORD COUNT CHECK ---
     if (wordCount < MIN_WORDS || wordCount > MAX_WORDS) return { valid: false };
 
     // === READABILITY CHECKS ===
@@ -158,6 +161,12 @@ async function processBookContent(textUrl, bookTitle) {
     // Too many ALL CAPS words? → old book with bad OCR or play
     const allCaps = (cleanText.match(/\b[A-Z]{4,}\b/g) || []).length;
     if (allCaps > 80) return { valid: false };
+    
+    // --- NEW: Sanity check for non-alphabetical chars (junk data) ---
+    // If more than 10% of characters are non-alphabetic/non-space/non-punctuation, reject.
+    const nonAlphaCount = (cleanText.match(/[^a-zA-Z\s\.\,\!\?\;\:\'\"]/g) || []).length;
+    if (nonAlphaCount / cleanText.length > 0.1) return { valid: false };
+
 
     // Must have some dialogue (very strong fiction signal)
     const hasDialogue = /"[^"]{15,}"/.test(text) || /“[^”]{15,}”/.test(text);
@@ -315,7 +324,13 @@ async function getStories(req, res) {
     res.json({
       success: true,
       total: pool.length,
-      books: pool.slice(0, limit)
+      // --- FIX: Remove large 'content' field for list view ---
+      books: pool.slice(0, limit).map(book => {
+        // Destructure to safely exclude the 'content' field
+        const { content, ...bookMetadata } = book;
+        return bookMetadata;
+      })
+      // --------------------------------------------------------
     });
 
   } catch (err) {

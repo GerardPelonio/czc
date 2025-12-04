@@ -6,17 +6,16 @@ const axios = require('axios');
 
 // Configuration
 const CACHE_FILE = path.join(__dirname, '../data/perfect-books-cache.json');
-const OUTPUT_FILE = CACHE_FILE; // Overwrites the existing file. Change name if you want a backup.
-const TIMEOUT_MS = 10000;
-
-// Gutenberg can block aggressive scraping, so we use a small delay.
-const DELAY_BETWEEN_REQUESTS_MS = 500; 
+const OUTPUT_FILE = CACHE_FILE;
+const TIMEOUT_MS = 15000;
+// Increased minimum length to be very sure we have the full story text
+const MIN_CONTENT_LENGTH = 3000; 
 
 async function filterLibrary() {
   console.log('📦 Loading library from:', CACHE_FILE);
 
   if (!fs.existsSync(CACHE_FILE)) {
-    console.error('❌ Error: Cache file not found.');
+    console.error('❌ Error: Cache file not found. Run the generation script first.');
     process.exit(1);
   }
 
@@ -29,93 +28,72 @@ async function filterLibrary() {
     process.exit(1);
   }
 
-  console.log(`🔍 Checking ${books.length} books for valid text content...`);
+  console.log(`🔍 Strictly checking ${books.length} books for readability...`);
   
   const validBooks = [];
-  const invalidBooks = [];
+  const removedBooks = [];
 
   for (let i = 0; i < books.length; i++) {
     const book = books[i];
-    const progress = `[${i + 1}/${books.length}]`;
-    
-    process.stdout.write(`${progress} Checking: ${book.title.substring(0, 30)}... `);
+    process.stdout.write(`[${i + 1}/${books.length}] Checking: ${book.title.substring(0, 20)}... `);
 
-    try {
-      const isValid = await checkUrl(book.source_url);
-      
-      if (isValid) {
-        console.log('✅ OK');
-        validBooks.push(book);
-      } else {
-        console.log('❌ INVALID (HTML/Empty)');
-        invalidBooks.push(book);
-      }
-    } catch (error) {
-      console.log(`❌ ERROR (${error.message})`);
-      invalidBooks.push(book);
+    // 1. Immediate Readme rejection (they don't contain the story)
+    if (book.source_url.toLowerCase().includes('readme.txt')) {
+      console.log('❌ REJECTED (Readme URL)');
+      removedBooks.push(book);
+      continue;
     }
 
+    try {
+      // 2. Fetch the actual content
+      const response = await axios.get(book.source_url, {
+        timeout: TIMEOUT_MS,
+        responseType: 'text',
+        headers: { 'User-Agent': 'CozyClip-Cleaner/1.0' }
+      });
+
+      const text = response.data;
+      const lowerText = text.toLowerCase();
+
+      // 3. Check for HTML disguised as Text (Soft 404)
+      if (lowerText.includes("<!doctype html") || lowerText.includes("<body")) {
+         console.log('❌ REJECTED (HTML Content)');
+         removedBooks.push(book);
+         continue;
+      }
+      
+      // 4. Check for "File Not Found" keywords
+      if (lowerText.includes("file not found") || lowerText.includes("404 not found")) {
+        console.log('❌ REJECTED (Content says 404)');
+        removedBooks.push(book);
+        continue;
+      }
+
+      // 5. Check Minimum Length (if it's too short, it's incomplete)
+      if (text.length < MIN_CONTENT_LENGTH) {
+        console.log(`❌ REJECTED (Too short: ${text.length} chars)`);
+        removedBooks.push(book);
+        continue;
+      }
+
+      // If all checks pass:
+      console.log('✅ OK');
+      validBooks.push(book);
+
+    } catch (error) {
+      // Handle network errors (timeouts, DNS issues, 404 HTTP status)
+      console.log(`❌ ERROR (${error.message})`);
+      removedBooks.push(book);
+    }
+    
     // Polite delay
-    await new Promise(resolve => setTimeout(resolve, DELAY_BETWEEN_REQUESTS_MS));
+    await new Promise(r => setTimeout(r, 200));
   }
 
   console.log('\n===========================================');
-  console.log('SUMMARY');
-  console.log('===========================================');
-  console.log(`Total Scanned: ${books.length}`);
-  console.log(`✅ Valid:      ${validBooks.length}`);
-  console.log(`❌ Removed:    ${invalidBooks.length}`);
-  
-  if (invalidBooks.length > 0) {
-    console.log('\nRemoved Books:');
-    invalidBooks.forEach(b => console.log(`- ${b.title} (${b.id})`));
-  }
-
-  // Save the filtered list
-  try {
-    fs.writeFileSync(OUTPUT_FILE, JSON.stringify(validBooks, null, 2));
-    console.log(`\n💾 Saved filtered library to: ${OUTPUT_FILE}`);
-  } catch (err) {
-    console.error('❌ Error saving file:', err.message);
-  }
-}
-
-async function checkUrl(url) {
-  if (!url) return false;
-
-  try {
-    const response = await axios.get(url, {
-      timeout: TIMEOUT_MS,
-      responseType: 'text',
-      // Mimic a browser to avoid some basic blocking
-      headers: {
-        'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/91.0.4472.124 Safari/537.36'
-      }
-    });
-
-    if (response.status !== 200) return false;
-
-    const content = response.data;
-
-    // 1. Check if empty
-    if (!content || content.length === 0) return false;
-
-    // 2. Check if response is HTML disguised as text
-    // Gutenberg often redirects dead .txt links to an HTML "Book not found" or "Bibrec" page.
-    const trimmedStart = content.trim().substring(0, 300).toLowerCase();
-    
-    if (trimmedStart.includes('<!doctype html') || 
-        trimmedStart.includes('<html') || 
-        trimmedStart.includes('<body') ||
-        (response.headers['content-type'] && response.headers['content-type'].includes('text/html'))) {
-      return false;
-    }
-
-    return true;
-
-  } catch (error) {
-    throw error; // Let the main loop handle the error logging
-  }
+  console.log(`✅ Valid: ${validBooks.length} | ❌ Removed: ${removedBooks.length}`);
+  fs.writeFileSync(OUTPUT_FILE, JSON.stringify(validBooks, null, 2));
+  console.log(`\n💾 Cleaned library saved to: ${OUTPUT_FILE}`);
 }
 
 filterLibrary();

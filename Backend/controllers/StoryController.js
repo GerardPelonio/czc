@@ -2,6 +2,34 @@ const axios = require("axios");
 const zlib = require("zlib");
 const { promisify } = require("util");
 const gunzip = promisify(zlib.gunzip);
+const fs = require('fs');         // <--- CRUCIAL IMPORT
+const path = require('path');       // <--- CRUCIAL IMPORT
+
+// ====================================================
+// CACHE SETUP
+// ====================================================
+const CACHE_FILE = path.join(__dirname, '..', 'data', 'perfect-books-cache.json');
+let perfectBooksCache = {}; // Map of { ID: BookObjectWithContent }
+
+function loadStoryCache() {
+  try {
+    if (fs.existsSync(CACHE_FILE)) {
+      const data = JSON.parse(fs.readFileSync(CACHE_FILE, 'utf8'));
+      // Convert array to an object map for O(1) lookup by ID
+      perfectBooksCache = data.reduce((map, book) => {
+        if (book.id) map[String(book.id).toUpperCase()] = book;
+        return map;
+      }, {});
+      console.log(`Story Cache loaded: ${Object.keys(perfectBooksCache).length} pre-validated books.`);
+      return true;
+    }
+  } catch (e) {
+    console.error("Failed to load Story Cache:", e.message);
+  }
+  return false;
+}
+
+loadStoryCache(); // Load cache immediately when the module starts
 
 // ----------------------------------------------------
 // Get Story by ID
@@ -10,13 +38,37 @@ async function getStoryById(req, res) {
   try {
     let { id } = req.params;
     if (!id) return res.status(400).json({ success: false, message: "ID required" });
-    // normalize to uppercase so `gb22440` and `GB22440` both work
-    const originalId = id;
+    
+    // Normalize to uppercase
     id = String(id).toUpperCase();
-    if (!id) return res.status(400).json({ success: false, message: "ID required" });
+    
+    console.log(`\nRequesting story: ${id}`);
 
-    console.log(`\nFetching story: ${id}`);
+    // === 1. CACHE CHECK (PRIORITY) ===
+    if (perfectBooksCache[id]) {
+      const cachedBook = perfectBooksCache[id];
+      console.log(`CACHE HIT: Returning ${id} from local cache.`);
+      
+      // Ensure the cached book has content before returning
+      if (cachedBook.content && cachedBook.content.length > 2000) {
+        return res.json({
+          success: true,
+          story: {
+            id: cachedBook.id,
+            title: cachedBook.title,
+            author: cachedBook.author,
+            content: cachedBook.content, // Use the pre-validated content
+            source: 'local_cache',
+            source_id: cachedBook.id.startsWith("GB") ? cachedBook.id.slice(2) : cachedBook.id,
+            content_preview: cachedBook.content.substring(0, 500) + (cachedBook.content.length > 500 ? "..." : ""),
+          },
+        });
+      }
+    }
 
+
+    // === 2. LIVE FETCH FALLBACK (Original logic for non-cached books) ===
+    console.log(`LIVE FETCH: Cache miss or invalid content. Attempting to fetch ${id} from source.`);
     let title = "Unknown";
     let author = "Unknown";
     let content = null;
@@ -94,6 +146,8 @@ async function getStoryById(req, res) {
     return res.status(500).json({ success: false, message: "Server error" });
   }
 }
+
+// (The remaining helper functions like extractCleanContent, fetchFromGutenberg, etc., are unchanged)
 
 // ----------------------------------------------------
 // Helper: Extract Clean Content

@@ -70,20 +70,6 @@
     "reading_time": "26 mins"
   },
   {
-    "id": "GB20049",
-    "title": "Great Big Treasury of Beatrix Potter",
-    "author": "Potter, Beatrix",
-    "cover_url": "https://www.gutenberg.org/cache/epub/20049/pg20049.cover.medium.jpg",
-    "source_url": "https://www.gutenberg.org/files/20049/20049-readme.txt",
-    "school_level": "Senior High",
-    "grade_range": "11–12",
-    "age_range": "16–18",
-    "genre": "Fantasy",
-    "pages": 14,
-    "word_count": 3616,
-    "reading_time": "28 mins"
-  },
-  {
     "id": "GB2429",
     "title": "Lost Face",
     "author": "London, Jack",
@@ -96,20 +82,6 @@
     "pages": 10,
     "word_count": 2613,
     "reading_time": "20 mins"
-  },
-  {
-    "id": "GB26463",
-    "title": "The Garden Party",
-    "author": "Mansfield, Katherine",
-    "cover_url": "https://www.gutenberg.org/cache/epub/26463/pg26463.cover.medium.jpg",
-    "source_url": "https://www.gutenberg.org/files/26463/26463_readme.txt",
-    "school_level": "Junior High",
-    "grade_range": "7–10",
-    "age_range": "12–16",
-    "genre": "Humor",
-    "pages": 14,
-    "word_count": 3420,
-    "reading_time": "28 mins"
   },
   {
     "id": "GB773",
@@ -138,20 +110,6 @@
     "pages": 11,
     "word_count": 2642,
     "reading_time": "22 mins"
-  },
-  {
-    "id": "GB20039",
-    "title": "Ghost Stories of an Antiquary",
-    "author": "James, M. R. (Montague Rhodes)",
-    "cover_url": "https://www.gutenberg.org/cache/epub/20039/pg20039.cover.medium.jpg",
-    "source_url": "https://www.gutenberg.org/files/20039/20039-readme.txt",
-    "school_level": "Junior High",
-    "grade_range": "7–10",
-    "age_range": "12–16",
-    "genre": "Romance",
-    "pages": 14,
-    "word_count": 3406,
-    "reading_time": "28 mins"
   },
   {
     "id": "GB11592",
@@ -210,20 +168,6 @@
     "reading_time": "26 mins"
   },
   {
-    "id": "GB26574",
-    "title": "The Extraordinary Adventures of Arsène Lupin",
-    "author": "Leblanc, Maurice",
-    "cover_url": "https://www.gutenberg.org/cache/epub/26574/pg26574.cover.medium.jpg",
-    "source_url": "https://www.gutenberg.org/files/26574/26574_readme.txt",
-    "school_level": "Junior High",
-    "grade_range": "7–10",
-    "age_range": "12–16",
-    "genre": "Sci-Fi",
-    "pages": 14,
-    "word_count": 3442,
-    "reading_time": "28 mins"
-  },
-  {
     "id": "GB269",
     "title": "Beasts and Super-Beasts",
     "author": "Saki",
@@ -252,34 +196,6 @@
     "reading_time": "30 mins"
   },
   {
-    "id": "GB22439",
-    "title": "The King in Yellow",
-    "author": "Chambers, Robert W. (Robert William)",
-    "cover_url": "https://www.gutenberg.org/cache/epub/22439/pg22439.cover.medium.jpg",
-    "source_url": "https://www.gutenberg.org/files/22439/22439-readme.txt",
-    "school_level": "Senior High",
-    "grade_range": "11–12",
-    "age_range": "16–18",
-    "genre": "Mystery",
-    "pages": 14,
-    "word_count": 3493,
-    "reading_time": "28 mins"
-  },
-  {
-    "id": "GB21523",
-    "title": "The King in Yellow",
-    "author": "Chambers, Robert W. (Robert William)",
-    "cover_url": "https://www.gutenberg.org/cache/epub/21523/pg21523.cover.medium.jpg",
-    "source_url": "https://www.gutenberg.org/files/21523/21523-readme.txt",
-    "school_level": "Junior High",
-    "grade_range": "7–10",
-    "age_range": "12–16",
-    "genre": "Horror",
-    "pages": 13,
-    "word_count": 3357,
-    "reading_time": "26 mins"
-  },
-  {
     "id": "GB645",
     "title": "The Figure in the Carpet",
     "author": "James, Henry",
@@ -294,20 +210,6 @@
     "reading_time": "20 mins"
   },
   {
-    "id": "GB26223",
-    "title": "Just so stories",
-    "author": "Kipling, Rudyard",
-    "cover_url": "https://www.gutenberg.org/cache/epub/26223/pg26223.cover.medium.jpg",
-    "source_url": "https://www.gutenberg.org/files/26223/26223-readme.txt",
-    "school_level": "Senior High",
-    "grade_range": "11–12",
-    "age_range": "16–18",
-    "genre": "Romance",
-    "pages": 14,
-    "word_count": 3401,
-    "reading_time": "28 mins"
-  },
-  {
     "id": "GB28554",
     "title": "Beyond Lies the Wub",
     "author": "Dick, Philip K.",
@@ -320,20 +222,6 @@
     "pages": 11,
     "word_count": 2739,
     "reading_time": "22 mins"
-  },
-  {
-    "id": "GB26249",
-    "title": "The Light Princess",
-    "author": "MacDonald, George",
-    "cover_url": "https://www.gutenberg.org/cache/epub/26249/pg26249.cover.medium.jpg",
-    "source_url": "https://www.gutenberg.org/files/26249/26249-readme.txt",
-    "school_level": "Senior High",
-    "grade_range": "11–12",
-    "age_range": "16–18",
-    "genre": "Horror",
-    "pages": 14,
-    "word_count": 3402,
-    "reading_time": "28 mins"
   },
   {
     "id": "GB396",
@@ -390,20 +278,6 @@
     "pages": 12,
     "word_count": 2908,
     "reading_time": "24 mins"
-  },
-  {
-    "id": "GB23937",
-    "title": "The Happy Prince",
-    "author": "Wilde, Oscar",
-    "cover_url": "https://www.gutenberg.org/cache/epub/23937/pg23937.cover.medium.jpg",
-    "source_url": "https://www.gutenberg.org/files/23937/23937-readme.txt",
-    "school_level": "Senior High",
-    "grade_range": "11–12",
-    "age_range": "16–18",
-    "genre": "Horror",
-    "pages": 13,
-    "word_count": 3333,
-    "reading_time": "26 mins"
   },
   {
     "id": "GB1075",
@@ -574,20 +448,6 @@
     "reading_time": "28 mins"
   },
   {
-    "id": "GB22440",
-    "title": "The Gift of the Magi",
-    "author": "Henry, O.",
-    "cover_url": "https://www.gutenberg.org/cache/epub/22440/pg22440.cover.medium.jpg",
-    "source_url": "https://www.gutenberg.org/files/22440/22440-readme.txt",
-    "school_level": "Senior High",
-    "grade_range": "11–12",
-    "age_range": "16–18",
-    "genre": "Humor",
-    "pages": 13,
-    "word_count": 3288,
-    "reading_time": "26 mins"
-  },
-  {
     "id": "GB66432",
     "title": "And All the Girls Were Nude",
     "author": "Magruder, Richard",
@@ -613,20 +473,6 @@
     "genre": "Humor",
     "pages": 13,
     "word_count": 3175,
-    "reading_time": "26 mins"
-  },
-  {
-    "id": "GB6541",
-    "title": "South Sea Tales",
-    "author": "London, Jack",
-    "cover_url": "https://www.gutenberg.org/cache/epub/6541/pg6541.cover.medium.jpg",
-    "source_url": "https://www.gutenberg.org/files/6541/6541-readme.txt",
-    "school_level": "Junior High",
-    "grade_range": "7–10",
-    "age_range": "12–16",
-    "genre": "Adventure",
-    "pages": 13,
-    "word_count": 3197,
     "reading_time": "26 mins"
   },
   {
