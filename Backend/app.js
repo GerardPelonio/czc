@@ -26,21 +26,19 @@ const rankingRoute = require('./routes/rankingRoute');
 const app = express();
 
 // =============================================================================
-// 1. THIS IS THE ONLY LINE YOU ABSOLUTELY NEEDED TO ADD
+// 1. TRUST PROXY: Fixes X-Forwarded-For issue on Vercel/proxies
 // =============================================================================
 app.set('trust proxy', 1); 
-// → Fixes the "X-Forwarded-For header is set but trust proxy is false" error
-// → Works perfectly on Vercel, etc.
 // =============================================================================
 
 // ------------------ Middlewares ------------------
 
 // MODIFIED CORS CONFIGURATION:
 // This sets the Access-Control-Allow-Origin header based on the environment.
-// IMPORTANT: Replace 'YOUR_PRODUCTION_FRONTEND_URL' with the actual domain 
-// where your frontend is deployed (e.g., https://cozyclips-fe.vercel.app).
+// ACTION REQUIRED: When deploying your frontend, replace 'YOUR_PRODUCTION_FRONTEND_URL'
+// with the actual URL (e.g., https://cozyclips-fe.vercel.app).
 const allowedOrigin = process.env.NODE_ENV === 'production' 
-  ? 'YOUR_PRODUCTION_FRONTEND_URL' // <-- CHANGE THIS!
+  ? 'YOUR_PRODUCTION_FRONTEND_URL' // <-- CHANGE THIS WHEN DEPLOYING FRONTEND
   : 'http://localhost:5173'; // Allows local development
 
 app.use(cors({
@@ -67,15 +65,8 @@ const limiter = rateLimit({
 app.use('/api', limiter);
 
 // Use JSON body parser for all routes except webhook routes that require a RAW body.
-// When a route uses `express.raw()` to capture the body (for example to verify a
-// webhook signature) we must avoid running `express.json()` after that — the
-// stream has already been consumed and `express.json()` will throw
-// "stream is not readable". To solve this cleanly we register a small
-// conditional middleware that only applies JSON parsing when the request is
-// *not* targeting a webhook endpoint.
 const jsonParser = express.json({ limit: '5mb' });
-// Small diagnostic middleware to help trace requests during dev.
-// Prints whether the stream is readable and if the body has been set.
+
 app.use((req, res, next) => {
   if (process.env.NODE_ENV !== 'production') {
     try {
@@ -91,17 +82,12 @@ app.use((req, res, next) => {
 
 app.use((req, res, next) => {
   // Skip JSON parsing for webhook endpoints that expect a raw body
-  // Adjust this path if you add other raw-body webhook routes
   if (req.originalUrl && req.originalUrl.startsWith('/api/webhook/')) return next();
 
   // If a body is already present (previous middleware parsed it), skip JSON parsing.
   if (typeof req.body !== 'undefined') return next();
 
-  // If the stream is not readable, don't attempt to parse as it will throw a
-  // 'stream not readable' error; log a warning and continue. This is defensive
-  // for environments where a proxy or earlier middleware may have consumed the
-  // stream (e.g., vercel dev). If the route requires a body and it is missing,
-  // controllers/validators should produce a clear validation error.
+  // If the stream is not readable, don't attempt to parse as it will throw an error.
   if (!req.readable) {
     console.warn('[warn] Request stream not readable; skipping express.json parse for', req.method, req.originalUrl);
     return next();
@@ -110,7 +96,6 @@ app.use((req, res, next) => {
   try {
     return jsonParser(req, res, (err) => {
       if (err) {
-        // If the body-parser is complaining about unreadable stream, log and skip.
         if (err && err.type === 'stream.not.readable') {
           console.warn('[warn] express.json failed due to unreadable stream; skipping parse for', req.method, req.originalUrl);
           return next();
@@ -120,7 +105,6 @@ app.use((req, res, next) => {
       return next();
     });
   } catch (err) {
-    // Defensive catch in case body-parser throws synchronously (rare)
     console.warn('[warn] Unexpected error during JSON parsing', err && err.message ? err.message : err);
     return next();
   }
@@ -194,16 +178,3 @@ app.use((err, req, res, next) => {
 });
 
 module.exports = app;
-```
-eof
-
-### **Action Required**
-
-1.  **Replace** the existing `Backend/app.js` file with the code above.
-2.  **Crucially**, update the `allowedOrigin` variable placeholder within `Backend/app.js`:
-
-    ```javascript
-    // In Backend/app.js:
-    const allowedOrigin = process.env.NODE_ENV === 'production' 
-      ? 'YOUR_PRODUCTION_FRONTEND_URL' // <-- Replace this with your frontend URL!
-      : 'http://localhost:5173';
