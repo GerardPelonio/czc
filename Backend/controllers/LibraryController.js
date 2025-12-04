@@ -66,7 +66,8 @@ function saveCache(books) {
 
 async function processBookContent(textUrl, bookTitle) {
   try {
-    const MAX_SIZE_BYTES = 60 * 1024; // 60KB limit
+    // Increased limit to 2MB to allow downloading full stories before processing
+    const MAX_SIZE_BYTES = 2 * 1024 * 1024; 
     const response = await axios.get(textUrl, { 
       timeout: 8000,
       maxContentLength: MAX_SIZE_BYTES, 
@@ -112,6 +113,7 @@ async function processBookContent(textUrl, bookTitle) {
 
     if (endIdx > startIdx) text = text.slice(startIdx, endIdx);
 
+    // Clean whitespace for word counting and reading
     const cleanText = text.replace(/[\r\n\t]+/g, ' ').replace(/\s+/g, ' ').trim();
     const wordCount = cleanText.split(' ').length;
 
@@ -120,7 +122,9 @@ async function processBookContent(textUrl, bookTitle) {
     }
 
     const pages = Math.round(wordCount / WORDS_PER_PAGE);
-    return { valid: true, pages, wordCount };
+    
+    // UPDATED: Now returning the full content so it can be saved to the object
+    return { valid: true, pages, wordCount, content: cleanText };
 
   } catch (err) {
     return { valid: false };
@@ -193,6 +197,8 @@ async function buildPerfectLibrary() {
       author: b.authors?.[0]?.name || "Unknown",
       cover_url: b.formats["image/jpeg"] || `https://www.gutenberg.org/cache/epub/${b.id}/pg${b.id}.cover.medium.jpg`,
       source_url: txtUrl,
+      // UPDATED: Saving the full text content so the frontend Reader works
+      content: stats.content, 
       school_level: Math.random() > 0.5 ? "Senior High" : "Junior High",
       grade_range: "7–12",
       age_range: "12–18",
@@ -222,9 +228,11 @@ async function getStories(req, res) {
     res.setHeader('Access-Control-Allow-Credentials', true);
     res.setHeader('Access-Control-Allow-Origin', '*'); 
     res.setHeader('Access-Control-Allow-Methods', 'GET,OPTIONS,PATCH,DELETE,POST,PUT');
+    
+    // UPDATED: Added "Expires" to the allowed headers list to fix your CORS error
     res.setHeader(
       'Access-Control-Allow-Headers',
-      'X-CSRF-Token, X-Requested-With, Accept, Accept-Version, Content-Length, Content-MD5, Content-Type, Date, X-Api-Version, Cache-Control, Pragma'
+      'X-CSRF-Token, X-Requested-With, Accept, Accept-Version, Content-Length, Content-MD5, Content-Type, Date, X-Api-Version, Cache-Control, Pragma, Expires'
     );
 
     // Handle Preflight Request
