@@ -1,11 +1,18 @@
 {
   "name": "czc-root",
   "private": true,
-  "workspaces": ["Backend"],
+  "workspaces": [
+    "Backend"
+  ],
   "scripts": {
     "build": "echo 'Build complete'",
     "start": "node Backend/server.js",
     "postinstall": "npm --workspace Backend run generate:library || echo \"Skipping library generation\""
   },
-  "engines": { "node": "22.x" }
+  "engines": {
+    "node": "22.x"
+  },
+  "dependencies": {
+    "vercel": "^48.12.1"
+  }
 }
