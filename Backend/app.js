@@ -1,9 +1,9 @@
 require('dotenv').config();
 const express = require('express');
-const cors = require('cors'); // <--- CORS is required here
+const cors = require('cors'); 
 const morgan = require('morgan');
 const { validationResult } = require('express-validator');
-const rateLimit = require('express-rate-limit'); // ← Make sure this is installed!
+const rateLimit = require('express-rate-limit'); 
 
 // Routes
 const HomeRoutes = require('./routes/HomeRoutes');
@@ -33,18 +33,14 @@ app.set('trust proxy', 1);
 
 // ------------------ Middlewares ------------------
 
-// MODIFIED CORS CONFIGURATION:
-// This sets the Access-Control-Allow-Origin header based on the environment.
-// ACTION REQUIRED: When deploying your frontend, replace 'YOUR_PRODUCTION_FRONTEND_URL'
-// with the actual URL (e.g., https://cozyclips-fe.vercel.app).
-const allowedOrigin = process.env.NODE_ENV === 'production' 
-  ? 'YOUR_PRODUCTION_FRONTEND_URL' // <-- CHANGE THIS WHEN DEPLOYING FRONTEND
-  : 'http://localhost:5173'; // Allows local development
-
+// =============================================================================
+// CORS FIX: ALLOW ALL ORIGINS
+// This ensures localhost:5173 can talk to your Vercel Backend
+// =============================================================================
 app.use(cors({
-  origin: allowedOrigin,
+  origin: '*', // Allow any frontend (Localhost or Production)
   methods: ['GET', 'POST', 'PUT', 'DELETE', 'OPTIONS'],
-  allowedHeaders: ['Content-Type', 'Authorization'],
+  allowedHeaders: ['Content-Type', 'Authorization', 'Cache-Control', 'Pragma', 'Expires'],
 }));
 
 app.use(morgan('dev'));
@@ -52,65 +48,34 @@ app.use(morgan('dev'));
 // PayMaya webhook needs raw body → must come BEFORE express.json()
 app.use('/api/webhook/paymaya', express.raw({ type: 'application/json' }));
 
-// Rate limiter (now works correctly because of trust proxy above)
+// Rate limiter
 const limiter = rateLimit({
-  windowMs: 15 * 60 * 1000, // 15 minutes
-  max: 600,                 // adjust as needed
+  windowMs: 15 * 60 * 1000, 
+  max: 600,                 
   standardHeaders: true,
   legacyHeaders: false,
   message: { success: false, message: 'Too many requests, please try again later.' }
 });
 
-// Apply rate limiting to all /api routes (recommended)
 app.use('/api', limiter);
 
-// Use JSON body parser for all routes except webhook routes that require a RAW body.
 const jsonParser = express.json({ limit: '5mb' });
 
 app.use((req, res, next) => {
-  if (process.env.NODE_ENV !== 'production') {
-    try {
-      const readable = !!req.readable;
-      const bodyExists = typeof req.body !== 'undefined';
-      console.debug(`[body-debug] ${req.method} ${req.originalUrl} readable=${readable} bodyExists=${bodyExists}`);
-    } catch (e) {
-      console.debug('[body-debug] failed to check req properties', e && e.message ? e.message : e);
-    }
-  }
-  return next();
-});
-
-app.use((req, res, next) => {
-  // Skip JSON parsing for webhook endpoints that expect a raw body
   if (req.originalUrl && req.originalUrl.startsWith('/api/webhook/')) return next();
-
-  // If a body is already present (previous middleware parsed it), skip JSON parsing.
   if (typeof req.body !== 'undefined') return next();
-
-  // If the stream is not readable, don't attempt to parse as it will throw an error.
-  if (!req.readable) {
-    console.warn('[warn] Request stream not readable; skipping express.json parse for', req.method, req.originalUrl);
-    return next();
-  }
+  if (!req.readable) return next();
 
   try {
     return jsonParser(req, res, (err) => {
-      if (err) {
-        if (err && err.type === 'stream.not.readable') {
-          console.warn('[warn] express.json failed due to unreadable stream; skipping parse for', req.method, req.originalUrl);
-          return next();
-        }
-        return next(err);
-      }
+      if (err) return next(err);
       return next();
     });
   } catch (err) {
-    console.warn('[warn] Unexpected error during JSON parsing', err && err.message ? err.message : err);
     return next();
   }
 });
 
-// Global express-validator error handler
 app.use((req, res, next) => {
   const errors = validationResult(req);
   if (!errors.isEmpty()) {
@@ -153,7 +118,6 @@ app.get('/', (req, res) => {
   });
 });
 
-// Health check
 app.get('/health', (req, res) => {
   const hasDb = !!(req.app?.locals?.db);
   res.json({ 
@@ -163,12 +127,10 @@ app.get('/health', (req, res) => {
   });
 });
 
-// 404 Handler
 app.use((req, res) => {
   res.status(404).json({ success: false, message: 'Route not found' });
 });
 
-// Global error handler (optional but recommended)
 app.use((err, req, res, next) => {
   console.error('Unhandled error:', err);
   res.status(err.status || 500).json({
