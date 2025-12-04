@@ -13,7 +13,7 @@ const FORCE_REFRESH = (process.env.FORCE_REFRESH === '1' || process.env.FORCE_RE
 let runtimeFastBuild = FAST_BUILD;
 let runtimeFullCount = false;
 const FAST_DEFAULT_PAGES = 8;
-const MAX_ALLOWED_PAGES = 15; // Define the new maximum page count for filtering
+const MAX_ALLOWED_PAGES = 15; // Define the maximum page count for filtering
 
 
 const CACHE_FILE = path.join(__dirname, '..', 'data', 'perfect-books-cache.json');
@@ -77,7 +77,7 @@ async function getPageCount(textUrl, bookId) {
   if (pageCountCache.has(bookId)) return pageCountCache.get(bookId);
   try {
     if (runtimeFullCount) {
-      // Full download and count (slower but more accurate) — same approach as generator script
+      // Full download and count (slower but more accurate)
       const { data: text } = await axios.get(textUrl, { timeout: 15000 });
 
       let cleanText = text;
@@ -87,8 +87,7 @@ async function getPageCount(textUrl, bookId) {
       cleanText = cleanText.replace(/[\r\n]+/g, "\n").replace(/Project Gutenberg.*/gi, "").trim();
       const wordCount = cleanText.split(/\s+/).filter(w => w.length > 0).length;
       let pages = Math.round(wordCount / 275);
-      pages = Math.max(5, pages); // Set minimum pages
-      // REMOVED: Math.min(15, pages) - Allows us to filter true long books
+      pages = Math.max(5, pages); 
       pageCountCache.set(bookId, pages);
       return pages;
     }
@@ -114,7 +113,15 @@ async function getPageCount(textUrl, bookId) {
     }
 
     let scale = 1;
-    if (totalBytes && sampledBytes > 0) scale = Math.max(1, totalBytes / sampledBytes);
+    // FIX: Be pessimistic if total size is unknown, to filter out large books
+    if (totalBytes && sampledBytes > 0) {
+        scale = Math.max(1, totalBytes / sampledBytes);
+    } else if (!totalBytes && sampledBytes > 0) {
+        // If content-length is missing, assume it's at least 20x larger than the sample
+        // to reject any large novels that passed the initial search filter.
+        scale = 20; 
+    }
+    
 
     let cleanText = text;
     const start = text.indexOf("*** START");
@@ -126,7 +133,6 @@ async function getPageCount(textUrl, bookId) {
 
     let pages = Math.round(estimatedTotalWords / 275);
     pages = Math.max(5, pages); // Set minimum pages
-    // REMOVED: Math.min(15, pages) - Allows us to filter true long books
 
     pageCountCache.set(bookId, pages);
     return pages;
@@ -290,7 +296,8 @@ async function buildPerfectLibrary(forceFast = false) {
     }
 
     // Use the estimated page count for the final metadata
-    const finalPages = Math.max(5, estimatedPages); // Ensure a minimum of 5 pages for display
+    // We clamp the final metadata page count to MAX_ALLOWED_PAGES for frontend consistency
+    const finalPages = Math.min(MAX_ALLOWED_PAGES, Math.max(5, estimatedPages)); 
 
     return {
       id: `GB${b.id}`,
@@ -302,7 +309,7 @@ async function buildPerfectLibrary(forceFast = false) {
       grade_range: item.level.includes("Senior") ? "11–12" : "7–10",
       age_range: item.level.includes("Senior") ? "16–18" : "12–16",
       genre: item.genre || "Drama",
-      pages: finalPages, // Use the filtered page count
+      pages: finalPages, // Use the filtered and clamped page count
       reading_time: `${Math.round(finalPages * 2.3)} minutes`
     };
   }));
