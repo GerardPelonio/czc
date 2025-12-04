@@ -11,12 +11,10 @@ const errorResponse = (res, message, status = 400) => {
  * GET /api/quest/progress - Returns all quests with user-specific progress.
  */
 async function getQuestsProgress(req, res) {
-    // Assuming you have an 'auth' middleware that attaches user data.
     const userId = req.user?.uid; 
     
-    // NOTE: Implement proper authentication check if not done in middleware.
     if (!userId) {
-        return errorResponse(res, "Authentication required.", 401);
+        return errorResponse(res, "Authentication required to view quests.", 401);
     }
     
     try {
@@ -40,7 +38,7 @@ async function completeQuest(req, res) {
     const { questId } = req.params;
 
     if (!userId) {
-        return errorResponse(res, "Authentication required.", 401);
+        return errorResponse(res, "Authentication required to claim reward.", 401);
     }
 
     if (!questId) {
@@ -48,15 +46,16 @@ async function completeQuest(req, res) {
     }
 
     try {
+        // Service returns the new coin balance in claimedQuest.newCoins
         const claimedQuest = await QuestService.claimQuestReward(userId, questId);
         
         return res.json({
             success: true,
-            message: `Reward claimed for ${claimedQuest.title}`,
+            message: `Reward claimed for ${claimedQuest.title}. You earned ${claimedQuest.reward} coins!`,
+            newCoins: claimedQuest.newCoins, // <--- NEW FIELD for frontend to update coin display
             quest: claimedQuest
         });
     } catch (error) {
-        // Send a 409 Conflict if already claimed or incomplete
         const status = error.message.includes('claimed') || error.message.includes('complete') ? 409 : 500;
         console.error(`Error claiming quest ${questId}:`, error.message);
         return errorResponse(res, error.message, status);
