@@ -5,27 +5,26 @@ const path = require('path');
 // ============================================
 // CONFIGURATION
 // ============================================
-const MIN_PAGES = 10;
-const MAX_PAGES = 15;
-const WORDS_PER_PAGE = 250; 
-const MIN_WORDS = 2500;
-const MAX_WORDS = 4500; 
+// Wide range to capture valid short stories (8-25 pages)
+const MIN_WORDS = 2000; 
+const MAX_WORDS = 6000; 
+const WORDS_PER_PAGE = 250;
+const TARGET_BOOK_COUNT = 55; 
 
-const TITLE_BLACKLIST = [
-  "history", "vol", "volume", "index", "dictionary", 
-  "encyclopedia", "collected", "complete", "works", 
-  "memoirs", "biography", "letters", "report", "manual"
+// Skip massive collections immediately by title
+const IGNORE_TITLES = [
+  "history", "complete", "works", "anthology", "volume", "vol.", 
+  "index", "dictionary", "encyclopedia", "handbook", "manual", "report", 
+  "memoirs", "letters", "poems", "poetry", "plays", "collection"
 ];
 
-const SUBJECT_BLACKLIST = [
-  "history", "biography", "periodicals", "politics", 
-  "reference", "instructional"
-];
+// Search these topics to find diverse books
+const TOPICS = ["mystery", "horror", "science fiction", "adventure", "fantasy", "humor", "suspense"];
 
 const CACHE_FILE = path.join(__dirname, '..', 'data', 'perfect-books-cache.json');
 const IS_SERVERLESS = !!process.env.VERCEL || process.env.SERVERLESS || process.env.NODE_ENV === 'production';
 
-// In-memory storage (persists while Vercel function is warm)
+// In-memory storage
 let perfectBooks = [];
 
 // ============================================
@@ -46,6 +45,13 @@ function loadCache() {
       if (Array.isArray(data) && data.length > 0) {
         perfectBooks = data;
         console.log(`✓ Loaded ${perfectBooks.length} books from cache: ${p}`);
+        
+        // --- CRITICAL FIX: VALIDATE CONTENT ---
+        // If the first book has no content, the cache is stale/useless.
+        if (!perfectBooks[0].content || perfectBooks[0].content.length < 100) {
+            console.log("⚠️ Cache found but missing content. Marking for rebuild.");
+            perfectBooks = []; // Clear it to force rebuild
+        }
         return;
       }
     } catch (e) {}
@@ -53,7 +59,6 @@ function loadCache() {
 }
 
 function saveCache(books) {
-  // On Vercel, we cannot save to disk permanently.
   if (IS_SERVERLESS) return;
   try {
     const dir = path.dirname(CACHE_FILE);
@@ -64,33 +69,29 @@ function saveCache(books) {
   }
 }
 
-async function processBookContent(textUrl, bookTitle) {
+// ============================================
+// CORE BUILDER LOGIC
+// ============================================
+
+async function processBook(textUrl) {
   try {
-    // Increased limit to 2MB to allow downloading full stories before processing
-    const MAX_SIZE_BYTES = 2 * 1024 * 1024; 
     const response = await axios.get(textUrl, { 
-      timeout: 8000,
-      maxContentLength: MAX_SIZE_BYTES, 
+      timeout: 10000, 
+      maxContentLength: 3 * 1024 * 1024, // 3MB limit
       validateStatus: (status) => status === 200
     });
 
     let text = response.data || '';
 
-    const structureChecks = [
-        /Chapter\s+(?:XX|20)/i, 
-        /Index\s*$/i,           
-        /Bibliography/i,        
-        /Table of Contents/i    
-    ];
-
-    for (const check of structureChecks) {
-        if (check.test(text.substring(0, 5000)) || check.test(text.substring(text.length - 5000))) {
-            return { valid: false };
-        }
+    // --- A. Structure Check ---
+    if (/Chapter\s+(?:15|20|XX)/i.test(text) || /Index\s*$/i.test(text.slice(-5000))) {
+        return { valid: false };
     }
 
+    // --- B. CLEANING ---
     const startMarkers = ["*** START", "START OF THIS PROJECT", "Produced by"];
     const endMarkers = ["*** END", "End of the Project", "End of Project"];
+    
     let startIdx = 0;
     let endIdx = text.length;
 
@@ -102,7 +103,6 @@ async function processBookContent(textUrl, bookTitle) {
             break;
         }
     }
-
     for (const m of endMarkers) {
         const i = text.lastIndexOf(m);
         if (i !== -1) {
@@ -110,109 +110,91 @@ async function processBookContent(textUrl, bookTitle) {
             break;
         }
     }
-
     if (endIdx > startIdx) text = text.slice(startIdx, endIdx);
 
-    // Clean whitespace for word counting and reading
-    const cleanText = text.replace(/[\r\n\t]+/g, ' ').replace(/\s+/g, ' ').trim();
-    const wordCount = cleanText.split(' ').length;
+    // Remove License junk and clean whitespace
+    let cleanText = text
+        .replace(/Project Gutenberg/gi, "")
+        .replace(/\r\n/g, "\n")
+        .replace(/\n{3,}/g, "\n\n") 
+        .trim();
 
-    if (wordCount < MIN_WORDS || wordCount > MAX_WORDS) {
-        return { valid: false };
-    }
+    // --- C. Word Count ---
+    const words = cleanText.split(/\s+/);
+    const wordCount = words.length;
+
+    if (wordCount < MIN_WORDS || wordCount > MAX_WORDS) return { valid: false };
 
     const pages = Math.round(wordCount / WORDS_PER_PAGE);
-    
-    // UPDATED: Now returning the full content so it can be saved to the object
-    return { valid: true, pages, wordCount, content: cleanText };
+    return { valid: true, pages, wordCount, cleanText };
 
   } catch (err) {
     return { valid: false };
   }
 }
 
-async function loadRawBooks() {
-  const agent = new (require("https").Agent)({ rejectUnauthorized: false });
-  const urls = [
-    `https://gutendex.com/books?languages=en&topic=short%20stories&sort=popular`,
-    `https://gutendex.com/books?languages=en&search=tale&sort=popular`
-  ];
-
-  let allBooks = [];
-  console.log('Fetching candidates from Gutendex...');
-
-  try {
-    for (const url of urls) {
-        const res = await axios.get(url, { timeout: 10000, httpsAgent: agent });
-        if (res.data.results) allBooks.push(...res.data.results);
-    }
-    allBooks = Array.from(new Map(allBooks.map(item => [item.id, item])).values());
-
-    return allBooks.filter(b => {
-        const titleLower = (b.title || "").toLowerCase();
-        if (TITLE_BLACKLIST.some(bad => titleLower.includes(bad))) return false;
-        if (b.subjects && b.subjects.some(s => SUBJECT_BLACKLIST.some(bad => s.toLowerCase().includes(bad)))) return false;
-        return b.formats && (b.formats["text/plain"] || b.formats["text/plain; charset=utf-8"]);
-    });
-  } catch (err) {
-    console.log("✗ Gutendex connection failed:", err.message);
-    return [];
-  }
-}
-
 async function buildPerfectLibrary() {
-  console.log('--- Building Library (On-Demand) ---');
-  const rawBooks = await loadRawBooks();
-  if (rawBooks.length === 0) return;
+  console.log('--- Rebuilding Library (Robust Mode) ---');
+  const agent = new (require("https").Agent)({ rejectUnauthorized: false });
+  let verifiedBooks = [];
+  let scannedIds = new Set();
 
-  const genres = ["Mystery", "Horror", "Sci-Fi", "Humor", "Romance", "Drama", "Fantasy"];
-  
-  function pLimit(concurrency) {
-    const queue = [];
-    let active = 0;
-    const next = () => {
-      if (queue.length === 0 || active >= concurrency) return;
-      active++;
-      const { fn, resolve, reject } = queue.shift();
-      fn().then(resolve, reject).finally(() => { active--; next(); });
-    };
-    return (fn) => new Promise((resolve, reject) => { 
-      queue.push({ fn, resolve, reject }); 
-      next(); 
-    });
+  // Loop through topics until we have enough books
+  for (const topic of TOPICS) {
+    if (verifiedBooks.length >= TARGET_BOOK_COUNT) break;
+    
+    // Fetch first 2 pages of this genre to save time
+    for (let page = 1; page <= 2; page++) {
+       if (verifiedBooks.length >= TARGET_BOOK_COUNT) break;
+
+       try {
+         const url = `https://gutendex.com/books?languages=en&topic=${topic}&sort=popular&page=${page}`;
+         const res = await axios.get(url, { timeout: 8000, httpsAgent: agent });
+         const results = res.data.results || [];
+
+         for (const b of results) {
+            if (verifiedBooks.length >= TARGET_BOOK_COUNT) break;
+            if (scannedIds.has(b.id)) continue; 
+            scannedIds.add(b.id);
+
+            if (IGNORE_TITLES.some(bad => b.title.toLowerCase().includes(bad))) continue;
+            
+            const txtUrl = b.formats["text/plain"] || b.formats["text/plain; charset=utf-8"] || b.formats["text/plain; charset=us-ascii"];
+            if (!txtUrl) continue;
+
+            // Analyze
+            const analysis = await processBook(txtUrl);
+
+            if (analysis.valid) {
+                const randomLevel = Math.random() > 0.5 ? "Senior High" : "Junior High";
+                const genreTitle = topic.charAt(0).toUpperCase() + topic.slice(1);
+
+                verifiedBooks.push({
+                    id: `GB${b.id}`,
+                    title: (b.title || "Untitled").split(/ by |,/i)[0].trim(),
+                    author: b.authors?.[0]?.name || "Unknown Author",
+                    cover_url: b.formats["image/jpeg"] || `https://www.gutenberg.org/cache/epub/${b.id}/pg${b.id}.cover.medium.jpg`,
+                    source_url: txtUrl,
+                    content: analysis.cleanText, // SAVING CONTENT
+                    school_level: randomLevel,
+                    grade_range: randomLevel === "Senior High" ? "11–12" : "7–10",
+                    age_range: randomLevel === "Senior High" ? "16–18" : "12–16",
+                    genre: genreTitle, 
+                    pages: analysis.pages,
+                    word_count: analysis.wordCount,
+                    reading_time: `${Math.round(analysis.pages * 2)} mins`
+                });
+            }
+         }
+       } catch (e) {
+         console.log(`Genre fetch error: ${e.message}`);
+       }
+    }
   }
 
-  const limit = pLimit(5); 
-
-  const tasks = rawBooks.map(b => limit(async () => {
-    const txtUrl = b.formats["text/plain"] || b.formats["text/plain; charset=utf-8"];
-    if (!txtUrl) return null;
-
-    const stats = await processBookContent(txtUrl, b.title);
-    if (!stats.valid) return null;
-
-    return {
-      id: `GB${b.id}`,
-      title: (b.title || "Untitled").split(/ by |,/i)[0].trim(),
-      author: b.authors?.[0]?.name || "Unknown",
-      cover_url: b.formats["image/jpeg"] || `https://www.gutenberg.org/cache/epub/${b.id}/pg${b.id}.cover.medium.jpg`,
-      source_url: txtUrl,
-      // UPDATED: Saving the full text content so the frontend Reader works
-      content: stats.content, 
-      school_level: Math.random() > 0.5 ? "Senior High" : "Junior High",
-      grade_range: "7–12",
-      age_range: "12–18",
-      genre: genres[Math.floor(Math.random() * genres.length)],
-      pages: stats.pages,
-      word_count: stats.wordCount,
-      reading_time: `${Math.round(stats.pages * 2)} mins`
-    };
-  }));
-
-  const results = (await Promise.all(tasks)).filter(Boolean);
-  perfectBooks = results;
-  saveCache(results);
-  console.log(`Library Ready: ${perfectBooks.length} books.`);
+  perfectBooks = verifiedBooks;
+  saveCache(verifiedBooks);
+  console.log(`Library Ready: ${perfectBooks.length} readable books.`);
 }
 
 // ============================================
@@ -224,23 +206,15 @@ loadCache();
 
 async function getStories(req, res) {
   try {
-    // 1. CORS CONFIGURATION (Crucial for Vercel/Frontend communication)
+    // 1. CORS Headers
     res.setHeader('Access-Control-Allow-Credentials', true);
     res.setHeader('Access-Control-Allow-Origin', '*'); 
     res.setHeader('Access-Control-Allow-Methods', 'GET,OPTIONS,PATCH,DELETE,POST,PUT');
-    
-    // UPDATED: Added "Expires" to the allowed headers list to fix your CORS error
-    res.setHeader(
-      'Access-Control-Allow-Headers',
-      'X-CSRF-Token, X-Requested-With, Accept, Accept-Version, Content-Length, Content-MD5, Content-Type, Date, X-Api-Version, Cache-Control, Pragma, Expires'
-    );
+    res.setHeader('Access-Control-Allow-Headers', 'X-CSRF-Token, X-Requested-With, Accept, Accept-Version, Content-Length, Content-MD5, Content-Type, Date, X-Api-Version, Cache-Control, Pragma, Expires');
 
-    // Handle Preflight Request
-    if (req.method === 'OPTIONS') {
-      return res.status(200).end();
-    }
+    if (req.method === 'OPTIONS') return res.status(200).end();
 
-    // 2. Disable Caching
+    // 2. Cache Control
     res.setHeader('Cache-Control', 'no-store, no-cache, must-revalidate, proxy-revalidate');
     res.setHeader('Pragma', 'no-cache');
     res.setHeader('Expires', '0');
@@ -248,34 +222,34 @@ async function getStories(req, res) {
     let { limit = 12, level, genre, refresh } = req.query;
     limit = Math.min(parseInt(limit) || 12, 50);
 
-    // 3. Lazy Loading / Force Refresh Logic
+    // 3. Auto-Heal: Rebuild if empty OR if missing content
     if (perfectBooks.length === 0 || refresh === 'true') {
-        console.log("Cache miss or refresh requested. Building library now...");
+        console.log("Library empty or stale. Building now...");
         await buildPerfectLibrary();
     }
 
-    // 4. Fallback if build fails
+    // 4. Fail-safe
     if (perfectBooks.length === 0) {
        return res.status(503).json({ 
          success: false, 
-         message: "Library is rebuilding. Please try again in 5 seconds.",
+         message: "Library is rebuilding. Please try again in 10 seconds.",
          books: [] 
        });
     }
 
-    // =========================================================
-    // 5. FILTER: Ensure content is strictly READABLE
-    // =========================================================
+    // 5. Filter for READABLE books only
     let pool = perfectBooks.filter(b => {
-        // Must have content property
-        if (!b.content) return false;
-        // Content must be a string and have substantial length (avoid empty files)
-        if (typeof b.content !== 'string' || b.content.trim().length < 100) return false;
-        
-        return true;
+        return b.content && typeof b.content === 'string' && b.content.length > 500;
     });
     
-    // Filters for Query Params
+    // Fallback if filter killed everything (should not happen with new logic)
+    if (pool.length === 0 && perfectBooks.length > 0) {
+        console.log("Panic: All books unreadable. Rebuilding...");
+        await buildPerfectLibrary(); // Try one more time
+        pool = perfectBooks;
+    }
+
+    // Apply Query Filters
     if (level === "junior") pool = pool.filter(b => b.school_level === "Junior High");
     if (level === "senior") pool = pool.filter(b => b.school_level === "Senior High");
     if (genre) pool = pool.filter(b => b.genre.toLowerCase() === genre.toLowerCase());
