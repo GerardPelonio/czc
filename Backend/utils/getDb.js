@@ -1,47 +1,65 @@
+// Backend/utils/getDb.js
+
 const firebase = require('firebase-admin');
+
+let defaultApp = null; // Store the initialized app instance
 
 function getDb() {
   try {
+    // Check if a default app has already been initialized
+    if (defaultApp) {
+      return defaultApp.firestore();
+    }
+    
+    // --- Existing logic to handle mocks/tests ---
     if (process && process.env && process.env.NODE_ENV === 'test') {
-      // In tests we often mock firebase-admin so allow firebase.firestore()
       if (firebase && typeof firebase.firestore === 'function') return firebase.firestore();
     }
-    // If firebase isn't initialized yet, and environment has credentials or emulator config, try to lazily initialize
-    if (!firebase.apps || !firebase.apps.length) {
-      const hasServiceAccountJson = !!process.env.FIREBASE_SERVICE_ACCOUNT_JSON;
-      const hasExplicitCreds = !!(process.env.FIREBASE_PROJECT_ID && process.env.FIREBASE_CLIENT_EMAIL && process.env.FIREBASE_PRIVATE_KEY);
-      const hasEmulator = !!process.env.FIRESTORE_EMULATOR_HOST || !!process.env.FIREBASE_EMULATOR_HOST;
-      const hasADC = !!process.env.GOOGLE_APPLICATION_CREDENTIALS;
-      if (hasServiceAccountJson || hasExplicitCreds || hasEmulator || hasADC) {
-        try {
-          if (hasServiceAccountJson) {
-            const serviceAccount = JSON.parse(process.env.FIREBASE_SERVICE_ACCOUNT_JSON);
-            firebase.initializeApp({ credential: firebase.credential.cert(serviceAccount) });
-          } else if (hasExplicitCreds) {
-            const serviceAccount = {
-              projectId: process.env.FIREBASE_PROJECT_ID,
-              clientEmail: process.env.FIREBASE_CLIENT_EMAIL,
-              privateKey: process.env.FIREBASE_PRIVATE_KEY.replace(/\\n/g, '\n'),
-            };
-            firebase.initializeApp({ credential: firebase.credential.cert(serviceAccount) });
-          } else if (hasEmulator) {
-            const projectId = process.env.FIREBASE_PROJECT_ID || process.env.GCLOUD_PROJECT || 'demo-project';
-            firebase.initializeApp({ projectId });
-          } else if (hasADC) {
-            firebase.initializeApp();
-          }
-        } catch (e) {
-          console.warn('getDb: failed to initialize firebase from env vars; continuing with null db', e && e.message ? e.message : e);
+    // ---------------------------------------------
+
+    // Check if an app exists in the global array (e.g., if initialized elsewhere)
+    if (firebase.apps && firebase.apps.length) {
+      defaultApp = firebase.apps[0];
+      return defaultApp.firestore();
+    }
+
+    // Attempt to initialize Firebase lazily using env vars
+    const hasServiceAccountJson = !!process.env.FIREBASE_SERVICE_ACCOUNT_JSON;
+    const hasExplicitCreds = !!(process.env.FIREBASE_PROJECT_ID && process.env.FIREBASE_CLIENT_EMAIL && process.env.FIREBASE_PRIVATE_KEY);
+    const hasEmulator = !!process.env.FIRESTORE_EMULATOR_HOST || !!process.env.FIREBASE_EMULATOR_HOST;
+    const hasADC = !!process.env.GOOGLE_APPLICATION_CREDENTIALS;
+
+    if (hasServiceAccountJson || hasExplicitCreds || hasEmulator || hasADC) {
+      try {
+        let options = {};
+        if (hasServiceAccountJson) {
+          const serviceAccount = JSON.parse(process.env.FIREBASE_SERVICE_ACCOUNT_JSON);
+          options.credential = firebase.credential.cert(serviceAccount);
+        } else if (hasExplicitCreds) {
+          const serviceAccount = {
+            projectId: process.env.FIREBASE_PROJECT_ID,
+            clientEmail: process.env.FIREBASE_CLIENT_EMAIL,
+            privateKey: process.env.FIREBASE_PRIVATE_KEY.replace(/\\n/g, '\n'),
+          };
+          options.credential = firebase.credential.cert(serviceAccount);
+        } else if (hasEmulator) {
+          options.projectId = process.env.FIREBASE_PROJECT_ID || process.env.GCLOUD_PROJECT || 'demo-project';
         }
+
+        defaultApp = firebase.initializeApp(options);
+        return defaultApp.firestore();
+        
+      } catch (e) {
+        console.error('getDb: FATAL Firebase Initialization Failed:', e.message);
+        return null; 
       }
     }
-    if (firebase.apps && firebase.apps.length) {
-      return firebase.firestore();
-    }
-    console.warn('getDb: firebase not initialized — returning null. Initialize firebase via server.js or set FIREBASE_* env vars.');
+    
+    console.warn('getDb: Firebase not initialized - returning null. Check FIREBASE_* env vars.');
     return null;
+
   } catch (e) {
-    console.warn('getDb: error while getting firestore', e && e.message ? e.message : e);
+    console.error('getDb: Unexpected error:', e.message);
     return null;
   }
 }
