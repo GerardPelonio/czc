@@ -1,14 +1,9 @@
-// Backend/app.js
-
 require('dotenv').config();
 const express = require('express');
 const cors = require('cors'); 
 const morgan = require('morgan');
 const { validationResult } = require('express-validator');
 const rateLimit = require('express-rate-limit'); 
-
-// Import getDb utility
-const { getDb } = require('./utils/getDb'); 
 
 // Routes
 const HomeRoutes = require('./routes/HomeRoutes');
@@ -29,21 +24,6 @@ const paymentRoute = require('./routes/paymentRoute');
 const rankingRoute = require('./routes/rankingRoute');
 
 const app = express();
-
-// =============================================================================
-// DB INITIALIZATION & STORAGE (FIX)
-// =============================================================================
-// Calls getDb() immediately, stabilizing the process before routes load.
-const dbInstance = getDb();
-if (dbInstance) {
-  app.locals.db = dbInstance;
-  console.log('Firebase initialized and stored on app.locals.db');
-} else {
-  // Logs failure but allows the server to start to return a 503 instead of crashing.
-  console.error('FATAL: Could not initialize Firebase/Firestore.');
-}
-// =============================================================================
-
 
 // =============================================================================
 // 1. TRUST PROXY: Fixes X-Forwarded-For issue on Vercel/proxies

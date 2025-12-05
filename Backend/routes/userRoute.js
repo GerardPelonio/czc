@@ -13,4 +13,5 @@ router.post('/api/user/login', authLimiter, loginValidator, controller.loginUser
 router.post('/api/user/forgot-password/send', authLimiter, sendOtpValidator, controller.sendForgotPasswordOtp);
 router.post('/api/user/forgot-password/verify', authLimiter, resetOtpValidator, controller.resetPasswordWithOtp);
 
+
 module.exports = router;
