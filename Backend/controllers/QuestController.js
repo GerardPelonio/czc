@@ -321,34 +321,46 @@ async function fixQuestTargets(db) {
         const updates = [];
         const updatePromises = [];
         
+        console.log("=== FIXING QUEST TARGETS ===");
+        console.log(`Found ${snapshot.size} quests in Firestore`);
+        
         snapshot.forEach(doc => {
             const questId = doc.id;
             const questData = doc.data();
             const title = questData.title || "";
+            const currentTarget = questData.target || 1;
+            
+            console.log(`Quest: ${questId}`);
+            console.log(`  Title: ${title}`);
+            console.log(`  Current target: ${currentTarget}`);
+            console.log(`  All fields:`, Object.keys(questData));
             
             // Determine correct target based on title
             if (title.includes("Marathon") || title.includes("Read 5")) {
                 // Reading Marathon should be 5 books
                 updatePromises.push(db.collection('quests').doc(questId).update({ target: 5 }));
-                updates.push({ questId, title, newTarget: 5 });
-                console.log(`Fixing ${questId} (${title}) to target: 5`);
+                updates.push({ questId, title, newTarget: 5, oldTarget: currentTarget });
+                console.log(`  ✓ Fixing to target: 5`);
             } else if (title.includes("Speed") || title.includes("week")) {
                 // Speed Reader should be 1 book in 1 week
                 updatePromises.push(db.collection('quests').doc(questId).update({ target: 1 }));
-                updates.push({ questId, title, newTarget: 1 });
-                console.log(`Fixing ${questId} (${title}) to target: 1`);
+                updates.push({ questId, title, newTarget: 1, oldTarget: currentTarget });
+                console.log(`  ✓ Fixing to target: 1`);
             } else if (title.includes("first") || title.includes("first book")) {
                 // First book should be 1
                 updatePromises.push(db.collection('quests').doc(questId).update({ target: 1 }));
-                updates.push({ questId, title, newTarget: 1 });
-                console.log(`Fixing ${questId} (${title}) to target: 1`);
+                updates.push({ questId, title, newTarget: 1, oldTarget: currentTarget });
+                console.log(`  ✓ Fixing to target: 1`);
+            } else {
+                console.log(`  - No fix needed`);
             }
         });
         
         // Wait for all updates to complete
         await Promise.all(updatePromises);
         
-        console.log("Quest target fixes applied:", updates);
+        console.log("=== QUEST TARGETS FIXED ===");
+        console.log("Updates applied:", updates);
         return { success: true, updates };
     } catch (error) {
         console.error("Error fixing quest targets:", error);
