@@ -94,11 +94,18 @@ async function getUserCoins(req, res) {
     try {
         const studentDoc = await db.collection('students').doc(userId).get();
         
+        console.log(`getUserCoins for ${userId}:`);
+        console.log(`Document exists: ${studentDoc.exists}`);
+        
         if (!studentDoc.exists) {
+            console.log("Student document doesn't exist, returning 0 coins");
             return res.json({ success: true, coins: 0 });
         }
 
-        const coins = studentDoc.data().coins || 0;
+        const studentData = studentDoc.data();
+        console.log("Student data:", studentData);
+        const coins = studentData.coins || 0;
+        console.log(`Returning coins: ${coins}`);
         return res.json({ success: true, coins });
     } catch (error) {
         console.error("Error fetching coins:", error);

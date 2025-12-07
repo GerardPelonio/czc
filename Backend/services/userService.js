@@ -143,17 +143,35 @@ async function addCoinsToUser(db, userId, amount) {
   if (!userId) throw Object.assign(new Error('Missing userId'), { status: 400 });
   if (!amount || amount <= 0) throw Object.assign(new Error('Invalid coin amount'), { status: 400 });
 
-  // Store coins in the students collection to match getUserCoins
-  const studentRef = db.collection('students').doc(userId);
-  const snap = await studentRef.get();
-  
-  const currentCoins = snap.exists ? (snap.data().coins || 0) : 0;
-  const newBalance = currentCoins + amount;
+  try {
+    // Store coins in the students collection to match getUserCoins
+    const studentRef = db.collection('students').doc(userId);
+    const snap = await studentRef.get();
+    
+    console.log(`Adding coins: userId=${userId}, amount=${amount}`);
+    console.log(`Student doc exists: ${snap.exists}`);
+    
+    if (snap.exists) {
+      console.log(`Student data before update:`, snap.data());
+    }
+    
+    const currentCoins = snap.exists ? (snap.data().coins || 0) : 0;
+    const newBalance = currentCoins + amount;
 
-  await studentRef.update({ coins: newBalance });
-  console.log(`Added ${amount} coins to user ${userId}. New balance: ${newBalance}`);
-  
-  return newBalance;
+    console.log(`Current coins: ${currentCoins}, New balance: ${newBalance}`);
+    
+    // Use set with merge to ensure document exists and coins are updated
+    await studentRef.set({ coins: newBalance }, { merge: true });
+    
+    // Verify the update
+    const verifySnap = await studentRef.get();
+    console.log(`Verified coins after update: ${verifySnap.data().coins}`);
+    
+    return newBalance;
+  } catch (error) {
+    console.error(`Error adding coins to user ${userId}:`, error);
+    throw error;
+  }
 }
 
 module.exports = { registerUser, authenticateUser, changePassword, createForgotOtp, resetPasswordByOtp, addCoinsToUser };
