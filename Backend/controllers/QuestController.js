@@ -177,13 +177,27 @@ async function updateQuestProgress(req, res) {
             
             if (studentDoc.exists) {
                 const currentBooksRead = studentDoc.data().booksRead || [];
+                const bookReadingTimes = studentDoc.data().bookReadingTimes || {};
+                
                 // Only add if not already in the array
                 if (!currentBooksRead.includes(bookId)) {
                     currentBooksRead.push(bookId);
+                    
+                    // Track reading time for this book
+                    // Get the book start time from localStorage (sent by frontend or default to now - 1 hour)
+                    const completionTime = Date.now();
+                    const startTime = req.body.startTime ? Number(req.body.startTime) : completionTime - (60 * 60 * 1000); // Default 1 hour ago
+                    
+                    bookReadingTimes[bookId] = {
+                        startTime: startTime,
+                        completionTime: completionTime
+                    };
+                    
                     await studentRef.update({
-                        booksRead: currentBooksRead
+                        booksRead: currentBooksRead,
+                        bookReadingTimes: bookReadingTimes
                     });
-                    console.log(`Added book ${bookId} to booksRead for user ${userId}`);
+                    console.log(`Added book ${bookId} to booksRead for user ${userId}. Read time: ${(completionTime - startTime) / (1000 * 60)} minutes`);
                 }
             }
         }
@@ -207,26 +221,9 @@ async function updateQuestProgress(req, res) {
             return res.json({ success: true, message: "No quests triggered by this event" });
         }
 
-        // Update progress for each matching quest
-        for (const quest of matchingQuests) {
-            const progressDocRef = db.collection('users').doc(userId).collection('quest_progress').doc(quest.id);
-            const progressDoc = await progressDocRef.get();
-            
-            let currentProgress = progressDoc.exists ? (progressDoc.data().currentProgress || 0) : 0;
-            let isClaimed = progressDoc.exists ? (progressDoc.data().isClaimed || false) : false;
-
-            // Increment progress
-            if (!isClaimed) {
-                currentProgress += 1;
-            }
-
-            // Update in Firestore
-            await progressDocRef.set({
-                currentProgress: currentProgress,
-                isClaimed: isClaimed,
-                lastUpdate: new Date()
-            }, { merge: true });
-        }
+        // NOTE: Progress is now calculated dynamically from student data (booksRead array length)
+        // in QuestModel.getUserQuestProgress(), so we don't manually increment here.
+        // We only need to update the book in the student's booksRead array (done above)
 
         return res.json({
             success: true,

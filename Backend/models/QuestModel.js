@@ -30,6 +30,7 @@ async function getUserQuestProgress(db, userId) {
                 const studentData = studentDoc.data();
                 const booksRead = (studentData.booksRead || []).length;
                 const quizzesCompleted = (studentData.quizzesCompleted || []).length;
+                const bookReadingTimes = studentData.bookReadingTimes || {}; // Maps bookId to {startTime, completionTime}
                 
                 // Fetch all quests to map triggers to quest IDs
                 const questsRef = db.collection('quests');
@@ -45,11 +46,27 @@ async function getUserQuestProgress(db, userId) {
                         let currentProgress = 0;
                         
                         if (trigger === 'books_read') {
+                            // Count total books read
                             currentProgress = booksRead;
                         } else if (trigger === 'quizzes_completed') {
                             currentProgress = quizzesCompleted;
                         } else if (trigger === 'first_book') {
                             currentProgress = booksRead > 0 ? 1 : 0;
+                        } else if (trigger === 'fast_reader') {
+                            // Count books completed within 1 week
+                            const oneWeekMs = 7 * 24 * 60 * 60 * 1000;
+                            let fastBooksCount = 0;
+                            
+                            for (const bookId in bookReadingTimes) {
+                                const times = bookReadingTimes[bookId];
+                                if (times && times.startTime && times.completionTime) {
+                                    const timeToComplete = times.completionTime - times.startTime;
+                                    if (timeToComplete <= oneWeekMs) {
+                                        fastBooksCount++;
+                                    }
+                                }
+                            }
+                            currentProgress = fastBooksCount;
                         }
                         
                         progressMap[questId] = {
