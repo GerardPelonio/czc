@@ -143,13 +143,15 @@ async function addCoinsToUser(db, userId, amount) {
   if (!userId) throw Object.assign(new Error('Missing userId'), { status: 400 });
   if (!amount || amount <= 0) throw Object.assign(new Error('Invalid coin amount'), { status: 400 });
 
-  const userRef = db.collection('users').doc(userId);
-  const snap = await userRef.get();
+  // Store coins in the students collection to match getUserCoins
+  const studentRef = db.collection('students').doc(userId);
+  const snap = await studentRef.get();
   
   const currentCoins = snap.exists ? (snap.data().coins || 0) : 0;
   const newBalance = currentCoins + amount;
 
-  await userRef.set({ coins: newBalance }, { merge: true });
+  await studentRef.update({ coins: newBalance });
+  console.log(`Added ${amount} coins to user ${userId}. New balance: ${newBalance}`);
   
   return newBalance;
 }

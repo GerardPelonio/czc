@@ -15,7 +15,8 @@ async function getQuestsFromFirestore(db) {
         snapshot.forEach(doc => {
             const data = doc.data();
             const target = Number(data.target) || 1; // Ensure it's always a number
-            const reward = Number(data.rewardCoins) || 0; // Ensure reward is a number
+            // Try multiple field names for reward
+            const reward = Number(data.rewardCoins || data.reward || data.coins || 0);
             quests.push({
                 id: doc.id,
                 title: data.title,
@@ -26,7 +27,16 @@ async function getQuestsFromFirestore(db) {
                 trigger: data.trigger,
                 order: data.order
             });
-            console.log(`Quest ${doc.id}: target=${target}, reward=${reward}, trigger=${data.trigger}, rewardCoinsRaw=${data.rewardCoins}`);
+            console.log(`Quest ${doc.id}:`, {
+                title: data.title,
+                target: target,
+                reward: reward,
+                allFields: Object.keys(data),
+                rewardCoinsField: data.rewardCoins,
+                rewardField: data.reward,
+                coinsField: data.coins,
+                trigger: data.trigger
+            });
         });
         
         // Sort by order
