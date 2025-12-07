@@ -137,9 +137,77 @@ async function addCoins(req, res) {
     }
 }
 
+// NEW FUNCTION 5: Update quest progress when user completes an action
+async function updateQuestProgress(req, res) {
+    const userId = req.user?.id;
+    const { eventType } = req.body;
+    
+    const db = req.app.locals.db || getDb();
+
+    if (!db) {
+        console.error("CRITICAL: Database connection missing in QuestController.");
+        return errorResponse(res, "Service temporarily unavailable (DB connection failed).", 503);
+    }
+
+    if (!userId) return errorResponse(res, "Authentication required.", 401);
+    if (!eventType) return errorResponse(res, "Event type is required.", 400);
+
+    try {
+        // Get all quests from Firestore
+        const questsRef = db.collection('quests');
+        const snapshot = await questsRef.get();
+        
+        const quests = [];
+        snapshot.forEach(doc => {
+            quests.push({
+                id: doc.id,
+                ...doc.data()
+            });
+        });
+
+        // Find quests matching this event type
+        const matchingQuests = quests.filter(q => q.trigger === eventType);
+
+        if (matchingQuests.length === 0) {
+            return res.json({ success: true, message: "No quests triggered by this event" });
+        }
+
+        // Update progress for each matching quest
+        for (const quest of matchingQuests) {
+            const progressDocRef = db.collection('users').doc(userId).collection('quest_progress').doc(quest.id);
+            const progressDoc = await progressDocRef.get();
+            
+            let currentProgress = progressDoc.exists ? (progressDoc.data().currentProgress || 0) : 0;
+            let isClaimed = progressDoc.exists ? (progressDoc.data().isClaimed || false) : false;
+
+            // Increment progress
+            if (!isClaimed) {
+                currentProgress += 1;
+            }
+
+            // Update in Firestore
+            await progressDocRef.set({
+                currentProgress: currentProgress,
+                isClaimed: isClaimed,
+                lastUpdate: new Date()
+            }, { merge: true });
+        }
+
+        return res.json({
+            success: true,
+            message: `Progress updated for ${matchingQuests.length} quest(s)`,
+            updatedQuests: matchingQuests.length
+        });
+    } catch (error) {
+        console.error("Error updating quest progress:", error);
+        return errorResponse(res, "Failed to update quest progress", 500);
+    }
+}
+
 module.exports = {
     getQuestsProgress,
     completeQuest,
     getUserCoins,
-    addCoins
+    addCoins,
+    updateQuestProgress
 };

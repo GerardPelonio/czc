@@ -9,6 +9,7 @@ const { verifyToken } = require('../middlewares/auth');
 // Existing routes
 router.get('/api/quest/progress', verifyToken, controller.getQuestsProgress);
 router.post('/api/quest/complete/:questId', authLimiter, verifyToken, controller.completeQuest);
+router.post('/api/quest/update-progress', verifyToken, controller.updateQuestProgress);
 
 // NEW: Coin routes
 router.get('/api/user/coins', verifyToken, controller.getUserCoins);
