@@ -61,9 +61,19 @@ async function completeQuest(req, res) {
             quest: claimedQuest
         });
     } catch (error) {
-        const status = error.message.includes('claimed') || error.message.includes('complete') ? 409 : 500;
+        let status = 500;
+        let message = error.message;
+        
+        if (error.message.includes('claimed')) {
+            status = 409;
+        } else if (error.message.includes('not yet complete')) {
+            status = 400;
+        } else if (error.message.includes('not found')) {
+            status = 404;
+        }
+        
         console.error(`Error claiming quest ${questId}:`, error.message);
-        return errorResponse(res, error.message, status);
+        return errorResponse(res, message, status);
     }
 }
 

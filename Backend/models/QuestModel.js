@@ -34,8 +34,13 @@ async function markQuestAsClaimed(db, userId, questId) {
     if (!db) throw new Error("Database connection missing for write operation.");
     
     const progressDocRef = db.collection('users').doc(userId).collection('quest_progress').doc(questId);
+    const progressDoc = await progressDocRef.get();
+    
+    // Preserve existing progress data
+    const currentData = progressDoc.exists ? progressDoc.data() : {};
     
     await progressDocRef.set({ 
+        ...currentData,
         isClaimed: true, 
         claimedAt: new Date() 
     }, { merge: true });
