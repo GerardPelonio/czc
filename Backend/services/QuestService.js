@@ -57,17 +57,23 @@ async function getQuestsWithProgress(db, userId) {
         const { currentProgress, isClaimed } = progressData;
 
         let status;
+        // Only mark as completed if reward has been claimed
         if (isClaimed) {
             status = 'completed';
-        } else if (currentProgress >= quest.targetProgress) {
+        } 
+        // Show ready to complete only if progress reached target but not claimed
+        else if (currentProgress >= quest.targetProgress) {
             status = 'ready_to_complete';
-        } else {
+        } 
+        // Otherwise in progress
+        else {
             status = 'in_progress';
         }
 
         return {
             ...quest,
             currentProgress: Math.min(currentProgress, quest.targetProgress),
+            targetProgress: quest.targetProgress,
             status: status,
         };
     });
