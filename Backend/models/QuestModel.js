@@ -41,40 +41,43 @@ async function getUserQuestProgress(db, userId) {
                     const questData = questDoc.data();
                     const trigger = questData.trigger;
                     
-                    // If progress doesn't exist, calculate from student data based on trigger
-                    if (!progressMap[questId]) {
-                        let currentProgress = 0;
+                    // ALWAYS recalculate for dynamic triggers, don't use stored progress
+                    let currentProgress = 0;
+                    let isClaimed = progressMap[questId]?.isClaimed || false; // Keep claimed status
+                    
+                    if (trigger === 'books_read') {
+                        // Count total books read - ALWAYS calculate dynamically
+                        currentProgress = booksRead;
+                    } else if (trigger === 'quizzes_completed') {
+                        currentProgress = quizzesCompleted;
+                    } else if (trigger === 'first_book') {
+                        currentProgress = booksRead > 0 ? 1 : 0;
+                    } else if (trigger === 'fast_reader') {
+                        // Count books completed within 1 week
+                        const oneWeekMs = 7 * 24 * 60 * 60 * 1000;
+                        let fastBooksCount = 0;
                         
-                        if (trigger === 'books_read') {
-                            // Count total books read
-                            currentProgress = booksRead;
-                        } else if (trigger === 'quizzes_completed') {
-                            currentProgress = quizzesCompleted;
-                        } else if (trigger === 'first_book') {
-                            currentProgress = booksRead > 0 ? 1 : 0;
-                        } else if (trigger === 'fast_reader') {
-                            // Count books completed within 1 week
-                            const oneWeekMs = 7 * 24 * 60 * 60 * 1000;
-                            let fastBooksCount = 0;
-                            
-                            for (const bookId in bookReadingTimes) {
-                                const times = bookReadingTimes[bookId];
-                                if (times && times.startTime && times.completionTime) {
-                                    const timeToComplete = times.completionTime - times.startTime;
-                                    if (timeToComplete <= oneWeekMs) {
-                                        fastBooksCount++;
-                                    }
+                        for (const bookId in bookReadingTimes) {
+                            const times = bookReadingTimes[bookId];
+                            if (times && times.startTime && times.completionTime) {
+                                const timeToComplete = times.completionTime - times.startTime;
+                                if (timeToComplete <= oneWeekMs) {
+                                    fastBooksCount++;
                                 }
                             }
-                            currentProgress = fastBooksCount;
                         }
-                        
-                        progressMap[questId] = {
-                            currentProgress: currentProgress,
-                            isClaimed: false,
-                            lastUpdate: new Date()
-                        };
+                        currentProgress = fastBooksCount;
+                    } else if (progressMap[questId]) {
+                        // For other trigger types, use stored progress if it exists
+                        currentProgress = progressMap[questId].currentProgress || 0;
                     }
+                    
+                    // Update the progress map with the calculated value
+                    progressMap[questId] = {
+                        currentProgress: currentProgress,
+                        isClaimed: isClaimed,
+                        lastUpdate: new Date()
+                    };
                 });
             }
         } catch (err) {
