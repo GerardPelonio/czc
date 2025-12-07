@@ -67,6 +67,19 @@ connectFirebase()
     app.locals.db = db;
     console.log('Firebase initialized');
 
+    // Fix quest targets on startup
+    if (db) {
+      try {
+        const QuestController = require('./controllers/QuestController');
+        const result = QuestController.fixQuestTargets(db);
+        if (result && result.success) {
+          console.log('Quest targets fixed on startup:', result.updates);
+        }
+      } catch (e) {
+        console.warn('Could not fix quest targets:', e.message);
+      }
+    }
+
     // Start payment expiry checker
     if (paymentService && typeof paymentService.startExpiryChecker === 'function') {
       try {
