@@ -8,7 +8,7 @@ const axios = require('axios');
 const CACHE_FILE = path.join(__dirname, '../data/perfect-books-cache.json');
 const OUTPUT_FILE = CACHE_FILE;
 const TIMEOUT_MS = 15000;
-// Increased minimum length to be very sure we have the full story text
+// Retaining a minimum length check (3000 chars) to filter out empty or error pages
 const MIN_CONTENT_LENGTH = 3000; 
 
 async function filterLibrary() {
@@ -55,30 +55,62 @@ async function filterLibrary() {
       const text = response.data;
       const lowerText = text.toLowerCase();
 
-      // 3. Check for HTML disguised as Text (Soft 404)
-      if (lowerText.includes("<!doctype html") || lowerText.includes("<body")) {
-         console.log('❌ REJECTED (HTML Content)');
+      // 3. Check for HTML/XML disguised as Text (Soft 404)
+      if (lowerText.includes("<!doctype html") || lowerText.includes("<body") || lowerText.includes("<html") || lowerText.includes("<?xml")) {
+         console.log('❌ REJECTED (HTML/XML Content)');
          removedBooks.push(book);
          continue;
       }
       
       // 4. Check for "File Not Found" keywords
-      if (lowerText.includes("file not found") || lowerText.includes("404 not found")) {
-        console.log('❌ REJECTED (Content says 404)');
+      if (lowerText.includes("file not found") || lowerText.includes("404 not found") || lowerText.includes("page not found") || lowerText.includes("server error")) {
+        console.log('❌ REJECTED (Content says Error/404)');
         removedBooks.push(book);
         continue;
       }
 
-      // 5. Check Minimum Length (if it's too short, it's incomplete)
+      // 5. Check Minimum Length (if it's too short, it's incomplete or an error file)
       if (text.length < MIN_CONTENT_LENGTH) {
-        console.log(`❌ REJECTED (Too short: ${text.length} chars)`);
+        console.log(`❌ REJECTED (Too short: ${text.length} chars, needs min ${MIN_CONTENT_LENGTH})`);
         removedBooks.push(book);
         continue;
       }
 
-      // If all checks pass:
+      // If all checks pass, add cleaned content to the book object
       console.log('✅ OK');
-      validBooks.push(book);
+      
+      // Clean the content (remove Gutenberg headers/footers)
+      let cleanContent = text;
+      const startMarkers = ["*** START", "START OF THIS PROJECT", "Produced by", "Start of the Project"];
+      const endMarkers = ["*** END", "End of the Project", "End of Project", "END OF THIS PROJECT"];
+      
+      let startIdx = 0;
+      let endIdx = cleanContent.length;
+      
+      for (const m of startMarkers) {
+        const i = cleanContent.indexOf(m);
+        if (i !== -1) {
+          const nextLine = cleanContent.indexOf('\n', i);
+          if (nextLine !== -1) startIdx = nextLine + 1;
+          break;
+        }
+      }
+      
+      for (const m of endMarkers) {
+        const i = cleanContent.lastIndexOf(m);
+        if (i !== -1) {
+          endIdx = i;
+          break;
+        }
+      }
+      
+      if (endIdx > startIdx) cleanContent = cleanContent.slice(startIdx, endIdx);
+      cleanContent = cleanContent.trim();
+      
+      validBooks.push({
+        ...book,
+        content: cleanContent
+      });
 
     } catch (error) {
       // Handle network errors (timeouts, DNS issues, 404 HTTP status)
