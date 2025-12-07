@@ -20,7 +20,8 @@ async function getQuestsProgress(req, res) {
     }
     
     if (!userId) {
-        return errorResponse(res, "Authentication required to view quests.", 401);
+        // This is the line that was being triggered.
+        return errorResponse(res, "Authentication required to view quests.", 401); 
     }
     
     try {
