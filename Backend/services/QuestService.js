@@ -88,10 +88,13 @@ async function getQuestsWithProgress(db, userId) {
 async function claimQuestReward(db, userId, questId) {
     // Fetch all quests from Firestore
     const quests = await getQuestsFromFirestore(db);
+    console.log("Available quest IDs:", quests.map(q => q.id));
+    console.log("Looking for questId:", questId, "Type:", typeof questId);
+    
     const quest = quests.find(q => q.id === questId);
     
     if (!quest) {
-        throw new Error("Quest not found.");
+        throw new Error(`Quest not found. Looking for ID: ${questId}, available: ${quests.map(q => q.id).join(", ")}`);
     }
 
     // Pass 'db' to internal call
