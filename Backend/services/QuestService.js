@@ -13,11 +13,21 @@ async function getQuestsFromFirestore(db) {
         
         const quests = [];
         snapshot.forEach(doc => {
+            const data = doc.data();
             quests.push({
                 id: doc.id,
-                ...doc.data()
+                title: data.title,
+                description: data.description,
+                targetProgress: data.target,
+                reward: data.rewardCoins,
+                badgeColor: data.badgeColor,
+                trigger: data.trigger,
+                order: data.order
             });
         });
+        
+        // Sort by order
+        quests.sort((a, b) => (a.order || 0) - (b.order || 0));
         
         return quests;
     } catch (error) {
