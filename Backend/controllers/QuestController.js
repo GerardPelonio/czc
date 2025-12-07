@@ -10,7 +10,7 @@ const errorResponse = (res, message, status = 400) => {
 
 // EXISTING FUNCTION 1: Get quests progress
 async function getQuestsProgress(req, res) {
-    const userId = req.user?.uid; 
+    const userId = req.user?.id; 
     
     const db = req.app.locals.db || getDb();
 
@@ -38,7 +38,7 @@ async function getQuestsProgress(req, res) {
 
 // EXISTING FUNCTION 2: Complete quest
 async function completeQuest(req, res) {
-    const userId = req.user?.uid;
+    const userId = req.user?.id;
     const { questId } = req.params;
     
     const db = req.app.locals.db || getDb();
@@ -69,7 +69,7 @@ async function completeQuest(req, res) {
 
 // NEW FUNCTION 3: GET user's coin balance
 async function getUserCoins(req, res) {
-    const userId = req.user?.uid;
+    const userId = req.user?.id;
     const db = req.app.locals.db || getDb();
 
     if (!db) {
@@ -98,7 +98,7 @@ async function getUserCoins(req, res) {
 
 // NEW FUNCTION 4: Add coins to user
 async function addCoins(req, res) {
-    const userId = req.user?.uid;
+    const userId = req.user?.id;
     const { amount, reason } = req.body;
     const db = req.app.locals.db || getDb();
 
