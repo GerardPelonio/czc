@@ -214,8 +214,18 @@ async function updateQuestProgress(req, res) {
             });
         });
 
-        // Find quests matching this event type
-        const matchingQuests = quests.filter(q => q.trigger === eventType);
+        // Map event types to quest triggers
+        const eventTriggerMap = {
+            'book_completed': 'books_read',  // book_completed event triggers the books_read quest
+            'first_book': 'first_book',
+            'quizzes_completed': 'quizzes_completed',
+            'fast_reader': 'fast_reader'
+        };
+
+        const questTrigger = eventTriggerMap[eventType] || eventType;
+        
+        // Find quests matching this trigger
+        const matchingQuests = quests.filter(q => q.trigger === questTrigger);
 
         if (matchingQuests.length === 0) {
             return res.json({ success: true, message: "No quests triggered by this event" });
