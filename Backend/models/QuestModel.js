@@ -10,6 +10,7 @@ async function getUserQuestProgress(db, userId) {
     }
 
     try {
+        // Get user quest progress from quest_progress collection
         const progressRef = db.collection('users').doc(userId).collection('quest_progress');
         const snapshot = await progressRef.get();
 
@@ -21,6 +22,35 @@ async function getUserQuestProgress(db, userId) {
                 lastUpdate: doc.data().lastUpdate ? doc.data().lastUpdate.toDate() : null
             };
         });
+        
+        // Also fetch student data to calculate dynamic progress based on triggers
+        try {
+            const studentDoc = await db.collection('students').doc(userId).get();
+            if (studentDoc.exists) {
+                const studentData = studentDoc.data();
+                const booksRead = (studentData.booksRead || []).length;
+                
+                // If quest_progress doesn't exist for "Reading Marathon", calculate from booksRead
+                if (!progressMap['reading-marathon']) {
+                    progressMap['reading-marathon'] = {
+                        currentProgress: booksRead,
+                        isClaimed: false,
+                        lastUpdate: new Date()
+                    };
+                }
+                
+                // For other quests based on completed quizzes, reading, etc.
+                if (!progressMap['speed-reader']) {
+                    progressMap['speed-reader'] = {
+                        currentProgress: booksRead > 0 ? 1 : 0, // Mark as completed if at least 1 book read in a week (simplified)
+                        isClaimed: false,
+                        lastUpdate: new Date()
+                    };
+                }
+            }
+        } catch (err) {
+            console.warn("Could not fetch student data for dynamic quest progress:", err.message);
+        }
         
         return progressMap;
 
