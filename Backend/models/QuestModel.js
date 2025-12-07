@@ -29,24 +29,36 @@ async function getUserQuestProgress(db, userId) {
             if (studentDoc.exists) {
                 const studentData = studentDoc.data();
                 const booksRead = (studentData.booksRead || []).length;
+                const quizzesCompleted = (studentData.quizzesCompleted || []).length;
                 
-                // If quest_progress doesn't exist for "Reading Marathon", calculate from booksRead
-                if (!progressMap['reading-marathon']) {
-                    progressMap['reading-marathon'] = {
-                        currentProgress: booksRead,
-                        isClaimed: false,
-                        lastUpdate: new Date()
-                    };
-                }
+                // Fetch all quests to map triggers to quest IDs
+                const questsRef = db.collection('quests');
+                const questsSnapshot = await questsRef.get();
                 
-                // For other quests based on completed quizzes, reading, etc.
-                if (!progressMap['speed-reader']) {
-                    progressMap['speed-reader'] = {
-                        currentProgress: booksRead > 0 ? 1 : 0, // Mark as completed if at least 1 book read in a week (simplified)
-                        isClaimed: false,
-                        lastUpdate: new Date()
-                    };
-                }
+                questsSnapshot.forEach(questDoc => {
+                    const questId = questDoc.id;
+                    const questData = questDoc.data();
+                    const trigger = questData.trigger;
+                    
+                    // If progress doesn't exist, calculate from student data based on trigger
+                    if (!progressMap[questId]) {
+                        let currentProgress = 0;
+                        
+                        if (trigger === 'books_read') {
+                            currentProgress = booksRead;
+                        } else if (trigger === 'quizzes_completed') {
+                            currentProgress = quizzesCompleted;
+                        } else if (trigger === 'first_book') {
+                            currentProgress = booksRead > 0 ? 1 : 0;
+                        }
+                        
+                        progressMap[questId] = {
+                            currentProgress: currentProgress,
+                            isClaimed: false,
+                            lastUpdate: new Date()
+                        };
+                    }
+                });
             }
         } catch (err) {
             console.warn("Could not fetch student data for dynamic quest progress:", err.message);
