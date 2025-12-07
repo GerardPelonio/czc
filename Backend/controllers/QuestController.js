@@ -150,7 +150,7 @@ async function addCoins(req, res) {
 // NEW FUNCTION 5: Update quest progress when user completes an action
 async function updateQuestProgress(req, res) {
     const userId = req.user?.id;
-    const { eventType } = req.body;
+    const { eventType, bookId } = req.body;
     
     const db = req.app.locals.db || getDb();
 
@@ -163,6 +163,24 @@ async function updateQuestProgress(req, res) {
     if (!eventType) return errorResponse(res, "Event type is required.", 400);
 
     try {
+        // If book_completed event, add book to student's booksRead array
+        if (eventType === 'book_completed' && bookId) {
+            const studentRef = db.collection('students').doc(userId);
+            const studentDoc = await studentRef.get();
+            
+            if (studentDoc.exists) {
+                const currentBooksRead = studentDoc.data().booksRead || [];
+                // Only add if not already in the array
+                if (!currentBooksRead.includes(bookId)) {
+                    currentBooksRead.push(bookId);
+                    await studentRef.update({
+                        booksRead: currentBooksRead
+                    });
+                    console.log(`Added book ${bookId} to booksRead for user ${userId}`);
+                }
+            }
+        }
+
         // Get all quests from Firestore
         const questsRef = db.collection('quests');
         const snapshot = await questsRef.get();
