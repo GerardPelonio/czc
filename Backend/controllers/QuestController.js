@@ -245,24 +245,50 @@ async function fixQuestTargets(req, res) {
     }
 
     try {
-        // Define correct quest configurations
-        const questUpdates = {
-            'reading-marathon': { target: 5, description: 'Read 5 books this month', targetProgress: 5 },
-            'speed-reader': { target: 1, description: 'Complete a book in 1 week', targetProgress: 1 }
-        };
+        // First, fetch all quests to see what IDs actually exist
+        const questsRef = db.collection('quests');
+        const snapshot = await questsRef.get();
+        
+        const existingQuests = {};
+        snapshot.forEach(doc => {
+            existingQuests[doc.id] = doc.data();
+        });
+        
+        console.log("Existing quest IDs:", Object.keys(existingQuests));
+        console.log("All quest data:", existingQuests);
 
-        for (const [questId, updates] of Object.entries(questUpdates)) {
-            const questRef = db.collection('quests').doc(questId);
-            await questRef.update({
-                target: updates.target
-            });
-            console.log(`Updated quest ${questId} with target: ${updates.target}`);
+        // Update each quest based on its title
+        const updates = [];
+        for (const [questId, questData] of Object.entries(existingQuests)) {
+            let targetValue = questData.target || 1;
+            
+            // Determine correct target based on title or trigger
+            if (questData.title?.includes("Marathon") || questData.title?.includes("Read 5")) {
+                targetValue = 5;
+                console.log(`Updating quest ${questId} (${questData.title}) to target: 5`);
+                updates.push({
+                    questId,
+                    oldTarget: questData.target,
+                    newTarget: 5
+                });
+                await db.collection('quests').doc(questId).update({ target: 5 });
+            } else if (questData.title?.includes("Speed") || questData.title?.includes("week")) {
+                targetValue = 1;
+                console.log(`Updating quest ${questId} (${questData.title}) to target: 1`);
+                updates.push({
+                    questId,
+                    oldTarget: questData.target,
+                    newTarget: 1
+                });
+                await db.collection('quests').doc(questId).update({ target: 1 });
+            }
         }
 
         return res.json({
             success: true,
             message: "Quest targets fixed",
-            updatedQuests: Object.keys(questUpdates)
+            existingQuests: Object.keys(existingQuests),
+            updatedQuests: updates
         });
     } catch (error) {
         console.error("Error fixing quest targets:", error);
