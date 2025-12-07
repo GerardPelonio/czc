@@ -15,7 +15,4 @@ router.post('/api/quest/update-progress', verifyToken, controller.updateQuestPro
 router.get('/api/user/coins', verifyToken, controller.getUserCoins);
 router.post('/api/user/add-coins', authLimiter, verifyToken, controller.addCoins);
 
-// ADMIN: Fix quest targets
-router.post('/api/admin/fix-quest-targets', controller.fixQuestTargets);
-
 module.exports = router;

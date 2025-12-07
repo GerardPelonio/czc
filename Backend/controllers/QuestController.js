@@ -301,6 +301,5 @@ module.exports = {
     completeQuest,
     getUserCoins,
     addCoins,
-    updateQuestProgress,
-    fixQuestTargets
+    updateQuestProgress
 };
