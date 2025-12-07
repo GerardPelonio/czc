@@ -69,13 +69,23 @@ async function getQuestsWithProgress(db, userId) {
         const progressData = userProgressMap[quest.id] || { currentProgress: 0, isClaimed: false };
         const { currentProgress, isClaimed } = progressData;
 
+        // FORCE correct targets based on quest title to work around Firestore data issues
+        let correctTarget = quest.targetProgress; // Default to whatever is in DB
+        if (quest.title && quest.title.includes("Marathon")) {
+            correctTarget = 5;
+        } else if (quest.title && quest.title.includes("Speed")) {
+            correctTarget = 1;
+        } else if (quest.title && (quest.title.includes("first") || quest.title.includes("first book"))) {
+            correctTarget = 1;
+        }
+
         let status;
         // Only mark as completed if reward has been claimed
         if (isClaimed) {
             status = 'completed';
         } 
         // Show ready to complete only if progress reached target but not claimed
-        else if (currentProgress >= quest.targetProgress) {
+        else if (currentProgress >= correctTarget) {
             status = 'ready_to_complete';
         } 
         // Otherwise in progress
@@ -85,8 +95,8 @@ async function getQuestsWithProgress(db, userId) {
 
         return {
             ...quest,
-            currentProgress: Math.min(currentProgress, quest.targetProgress),
-            targetProgress: quest.targetProgress,
+            currentProgress: Math.min(currentProgress, correctTarget),
+            targetProgress: correctTarget,
             status: status,
         };
     });
