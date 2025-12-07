@@ -296,10 +296,61 @@ async function fixQuestTargets(req, res) {
     }
 }
 
+// ADMIN FUNCTION: Fix quest target values in Firestore (called server-side only)
+async function fixQuestTargets(db) {
+    if (!db) {
+        console.error("Database connection missing");
+        return { success: false, message: "DB connection failed" };
+    }
+
+    try {
+        // Fetch all quests to see what IDs exist
+        const questsRef = db.collection('quests');
+        const snapshot = await questsRef.get();
+        
+        const updates = [];
+        const updatePromises = [];
+        
+        snapshot.forEach(doc => {
+            const questId = doc.id;
+            const questData = doc.data();
+            const title = questData.title || "";
+            
+            // Determine correct target based on title
+            if (title.includes("Marathon") || title.includes("Read 5")) {
+                // Reading Marathon should be 5 books
+                updatePromises.push(db.collection('quests').doc(questId).update({ target: 5 }));
+                updates.push({ questId, title, newTarget: 5 });
+                console.log(`Fixing ${questId} (${title}) to target: 5`);
+            } else if (title.includes("Speed") || title.includes("week")) {
+                // Speed Reader should be 1 book in 1 week
+                updatePromises.push(db.collection('quests').doc(questId).update({ target: 1 }));
+                updates.push({ questId, title, newTarget: 1 });
+                console.log(`Fixing ${questId} (${title}) to target: 1`);
+            } else if (title.includes("first") || title.includes("first book")) {
+                // First book should be 1
+                updatePromises.push(db.collection('quests').doc(questId).update({ target: 1 }));
+                updates.push({ questId, title, newTarget: 1 });
+                console.log(`Fixing ${questId} (${title}) to target: 1`);
+            }
+        });
+        
+        // Wait for all updates to complete
+        await Promise.all(updatePromises);
+        
+        console.log("Quest target fixes applied:", updates);
+        return { success: true, updates };
+    } catch (error) {
+        console.error("Error fixing quest targets:", error);
+        return { success: false, error: error.message };
+    }
+}
+
 module.exports = {
     getQuestsProgress,
     completeQuest,
     getUserCoins,
     addCoins,
-    updateQuestProgress
+    updateQuestProgress,
+    fixQuestTargets
 };

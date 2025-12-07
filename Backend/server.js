@@ -63,7 +63,7 @@ Run the server in "limited mode" without Firestore. See README_FIRESTORE.md for 
 const PORT = process.env.PORT || 5000;
 
 connectFirebase()
-  .then(db => {
+  .then(async (db) => {
     app.locals.db = db;
     console.log('Firebase initialized');
 
@@ -71,7 +71,7 @@ connectFirebase()
     if (db) {
       try {
         const QuestController = require('./controllers/QuestController');
-        const result = QuestController.fixQuestTargets(db);
+        const result = await QuestController.fixQuestTargets(db);
         if (result && result.success) {
           console.log('Quest targets fixed on startup:', result.updates);
         }
