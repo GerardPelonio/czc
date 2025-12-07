@@ -14,16 +14,18 @@ async function getQuestsFromFirestore(db) {
         const quests = [];
         snapshot.forEach(doc => {
             const data = doc.data();
+            const target = Number(data.target) || 1; // Ensure it's always a number
             quests.push({
                 id: doc.id,
                 title: data.title,
                 description: data.description,
-                targetProgress: data.target,
+                targetProgress: target,
                 reward: data.rewardCoins,
                 badgeColor: data.badgeColor,
                 trigger: data.trigger,
                 order: data.order
             });
+            console.log(`Quest ${doc.id}: target=${target}, trigger=${data.trigger}`);
         });
         
         // Sort by order
