@@ -92,13 +92,13 @@ async function getUserCoins(req, res) {
     }
 
     try {
-        const userDoc = await db.collection('users').doc(userId).get();
+        const studentDoc = await db.collection('students').doc(userId).get();
         
-        if (!userDoc.exists) {
+        if (!studentDoc.exists) {
             return res.json({ success: true, coins: 0 });
         }
 
-        const coins = userDoc.data().coins || 0;
+        const coins = studentDoc.data().coins || 0;
         return res.json({ success: true, coins });
     } catch (error) {
         console.error("Error fetching coins:", error);
