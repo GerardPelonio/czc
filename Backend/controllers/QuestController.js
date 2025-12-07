@@ -236,10 +236,45 @@ async function updateQuestProgress(req, res) {
     }
 }
 
+// ADMIN FUNCTION: Fix quest target values in Firestore
+async function fixQuestTargets(req, res) {
+    const db = req.app.locals.db || getDb();
+
+    if (!db) {
+        return errorResponse(res, "Service temporarily unavailable (DB connection failed).", 503);
+    }
+
+    try {
+        // Define correct quest configurations
+        const questUpdates = {
+            'reading-marathon': { target: 5, description: 'Read 5 books this month', targetProgress: 5 },
+            'speed-reader': { target: 1, description: 'Complete a book in 1 week', targetProgress: 1 }
+        };
+
+        for (const [questId, updates] of Object.entries(questUpdates)) {
+            const questRef = db.collection('quests').doc(questId);
+            await questRef.update({
+                target: updates.target
+            });
+            console.log(`Updated quest ${questId} with target: ${updates.target}`);
+        }
+
+        return res.json({
+            success: true,
+            message: "Quest targets fixed",
+            updatedQuests: Object.keys(questUpdates)
+        });
+    } catch (error) {
+        console.error("Error fixing quest targets:", error);
+        return errorResponse(res, "Failed to fix quest targets", 500);
+    }
+}
+
 module.exports = {
     getQuestsProgress,
     completeQuest,
     getUserCoins,
     addCoins,
-    updateQuestProgress
+    updateQuestProgress,
+    fixQuestTargets
 };
