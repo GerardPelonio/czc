@@ -314,16 +314,53 @@ async function fixQuestTargets(db) {
     }
 
     try {
-        // Fetch all quests to see what IDs exist
+        // Define the required quests
+        const requiredQuests = [
+            {
+                questId: '0',
+                title: 'New User Challenge',
+                description: 'Complete your first book and get your starting coins!',
+                trigger: 'first_book',
+                target: 1,
+                rewardCoins: 250,
+                order: 0
+            },
+            {
+                questId: '1',
+                title: 'Reading Marathon',
+                description: 'Read 5 books this month',
+                trigger: 'books_read',
+                target: 5,
+                rewardCoins: 100,
+                order: 1
+            },
+            {
+                questId: '2',
+                title: 'Speed Reader',
+                description: 'Complete a book in one week',
+                trigger: 'fast_reader',
+                target: 1,
+                rewardCoins: 50,
+                order: 2
+            }
+        ];
+
+        // Fetch all quests to see what exists
         const questsRef = db.collection('quests');
         const snapshot = await questsRef.get();
-        
-        const updates = [];
-        const updatePromises = [];
+        const existingQuestIds = new Set();
         
         console.log("=== FIXING QUEST TARGETS ===");
         console.log(`Found ${snapshot.size} quests in Firestore`);
         
+        snapshot.forEach(doc => {
+            existingQuestIds.add(doc.id);
+        });
+
+        const updates = [];
+        const updatePromises = [];
+        
+        // Process existing quest documents to fix targets
         snapshot.forEach(doc => {
             const questId = doc.id;
             const questData = doc.data();
@@ -333,21 +370,17 @@ async function fixQuestTargets(db) {
             console.log(`Quest: ${questId}`);
             console.log(`  Title: ${title}`);
             console.log(`  Current target: ${currentTarget}`);
-            console.log(`  All fields:`, Object.keys(questData));
             
             // Determine correct target based on title
             if (title.includes("Marathon") || title.includes("Read 5")) {
-                // Reading Marathon should be 5 books
                 updatePromises.push(db.collection('quests').doc(questId).update({ target: 5 }));
                 updates.push({ questId, title, newTarget: 5, oldTarget: currentTarget });
                 console.log(`  ✓ Fixing to target: 5`);
             } else if (title.includes("Speed") || title.includes("week")) {
-                // Speed Reader should be 1 book in 1 week
                 updatePromises.push(db.collection('quests').doc(questId).update({ target: 1 }));
                 updates.push({ questId, title, newTarget: 1, oldTarget: currentTarget });
                 console.log(`  ✓ Fixing to target: 1`);
             } else if (title.includes("first") || title.includes("first book")) {
-                // First book should be 1
                 updatePromises.push(db.collection('quests').doc(questId).update({ target: 1 }));
                 updates.push({ questId, title, newTarget: 1, oldTarget: currentTarget });
                 console.log(`  ✓ Fixing to target: 1`);
@@ -355,6 +388,33 @@ async function fixQuestTargets(db) {
                 console.log(`  - No fix needed`);
             }
         });
+
+        // Ensure required quests exist and have correct values
+        console.log(`\n=== ENSURING REQUIRED QUESTS EXIST ===`);
+        for (const requiredQuest of requiredQuests) {
+            if (!existingQuestIds.has(requiredQuest.questId)) {
+                console.log(`Creating missing quest: ${requiredQuest.questId} (${requiredQuest.title})`);
+                updatePromises.push(
+                    db.collection('quests').doc(requiredQuest.questId).set({
+                        ...requiredQuest,
+                        createdAt: new Date(),
+                        updatedAt: new Date()
+                    }, { merge: true })
+                );
+                updates.push({ questId: requiredQuest.questId, title: requiredQuest.title, action: 'created' });
+            } else {
+                console.log(`Quest exists: ${requiredQuest.questId} (${requiredQuest.title})`);
+                // Update it to ensure correct values
+                updatePromises.push(
+                    db.collection('quests').doc(requiredQuest.questId).update({
+                        target: requiredQuest.target,
+                        trigger: requiredQuest.trigger,
+                        rewardCoins: requiredQuest.rewardCoins,
+                        updatedAt: new Date()
+                    })
+                );
+            }
+        }
         
         // Wait for all updates to complete
         await Promise.all(updatePromises);
