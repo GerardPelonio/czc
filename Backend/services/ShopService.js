@@ -42,7 +42,7 @@ async function listItems(db, { page = 1, limit = 20 }) {
     }
 
     let items = snapshot.docs.map(doc => ({
-      itemId: doc.id,
+      id: doc.id,
       ...doc.data()
     }));
 
@@ -54,7 +54,7 @@ async function listItems(db, { page = 1, limit = 20 }) {
       items = shopItemsData
         .sort((a, b) => a.cost - b.cost)
         .slice(start, end)
-        .map(item => ({ itemId: item.id, ...item }));
+        .map(item => ({ ...item }));
     }
 
     // Get total count with fallback
