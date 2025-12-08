@@ -34,11 +34,14 @@ app.set('trust proxy', 1);
 // ------------------ Middlewares ------------------
 
 // =============================================================================
-// CORS FIX: ALLOW ALL ORIGINS
-// This ensures localhost:5173 can talk to your Vercel Backend
+// CORS FIX: ALLOW SPECIFIC ORIGINS OR FALLBACK TO ALL
 // =============================================================================
+
+// Use environment variable FRONTEND_URL, or fallback to '*' 
+const allowedOrigin = process.env.FRONTEND_URL || '*'; 
+
 app.use(cors({
-  origin: '*', // Allow any frontend (Localhost or Production)
+  origin: allowedOrigin, // Now uses the environment variable
   methods: ['GET', 'POST', 'PUT', 'DELETE', 'OPTIONS'],
   allowedHeaders: ['Content-Type', 'Authorization', 'Cache-Control', 'Pragma', 'Expires'],
 }));

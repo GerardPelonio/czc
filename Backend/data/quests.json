@@ -3,7 +3,7 @@
     "questId": "7-day-reading-warrior",
     "title": "7 - Day Reading Warrior",
     "description": "Read for 7 consecutive days",
-    "trigger": "books_read",
+    "trigger": "streak_days",
     "target": 7,
     "rewardCoins": 250,
     "rarity": "uncommon",
