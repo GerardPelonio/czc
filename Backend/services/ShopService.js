@@ -47,7 +47,7 @@ async function listItems(db, { page = 1, limit = 20 }) {
     }));
 
     // If no items in Firestore, fallback to JSON data
-    if (items.length === 0 && !snapshot.empty === false) {
+    if (items.length === 0) {
       console.log("No items in Firestore, using fallback JSON data");
       const start = offset;
       const end = start + limit;
