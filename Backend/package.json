@@ -10,7 +10,8 @@
     "migrate:quizzes": "node tools/migrate-quizzes.js",
     "migrate:quests": "node tools/migrate-quests.js",
     "migrate:quests:seed": "node tools/migrate-quests.js seed",
-    "migrate:quests:convert-students": "node tools/migrate-quests.js --convert-student-quests"
+    "migrate:quests:convert-students": "node tools/migrate-quests.js --convert-student-quests",
+    "import:shop-items": "node scripts/importShopItems.js"
   },
   "dependencies": {
     "@google/generative-ai": "^0.24.1",
