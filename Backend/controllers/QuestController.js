@@ -427,6 +427,67 @@ async function fixQuestTargets(db) {
         return { success: false, error: error.message };
     }
 }
+/**
+ * Initialize quests in Firestore from JSON data
+ * Admin/Internal endpoint (protected)
+ */
+async function initQuests(req, res) {
+  try {
+    // For now, allow during development
+    const allowInit = process.env.NODE_ENV === 'development' || req.headers['x-init-quests'] === 'true';
+    
+    if (!allowInit) {
+      return res.status(401).json({
+        success: false,
+        message: "Unauthorized - Admin initialization required"
+      });
+    }
+
+    const db = req.app.locals.db || getDb();
+    if (!db) {
+      return res.status(503).json({
+        success: false,
+        message: "Service temporarily unavailable - Database not initialized"
+      });
+    }
+
+    const questsData = require("../data/quests.json");
+    const questsCollection = db.collection('quests');
+    
+    // Use batch for efficient writes
+    const batch = db.batch();
+    let processed = 0;
+
+    for (const quest of questsData) {
+      const docRef = questsCollection.doc(quest.questId);
+      batch.set(docRef, {
+        ...quest,
+        createdAt: new Date().toISOString(),
+        updatedAt: new Date().toISOString()
+      }, { merge: true });
+      processed++;
+    }
+    
+    await batch.commit();
+
+    console.log(`Quests initialized successfully: ${processed} quests`);
+    
+    return res.status(200).json({
+      success: true,
+      message: "Quests initialized successfully in Firestore",
+      stats: {
+        questsProcessed: processed,
+        quests: questsData.map(q => ({ questId: q.questId, title: q.title }))
+      }
+    });
+  } catch (err) {
+    console.error("Error initializing quests:", err.message);
+    return res.status(500).json({
+      success: false,
+      message: err.message || "Failed to initialize quests"
+    });
+  }
+}
 
 module.exports = {
     getQuestsProgress,
@@ -434,5 +495,6 @@ module.exports = {
     getUserCoins,
     addCoins,
     updateQuestProgress,
-    fixQuestTargets
+    fixQuestTargets,
+    initQuests
 };

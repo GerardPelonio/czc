@@ -15,4 +15,7 @@ router.post('/api/quest/update-progress', verifyToken, controller.updateQuestPro
 router.get('/api/user/coins', verifyToken, controller.getUserCoins);
 router.post('/api/user/add-coins', authLimiter, verifyToken, controller.addCoins);
 
+// Admin routes
+router.post('/api/quest/admin/init', controller.initQuests);
+
 module.exports = router;
