@@ -107,4 +107,59 @@ async function getTransactions(req, res) {
   }
 }
 
-module.exports = { listItems, redeem, getTransactions };
+/**
+ * Initialize shop items in Firestore from JSON data
+ * Admin/Internal endpoint (protected by admin key)
+ */
+async function initShopItems(req, res) {
+  try {
+    // Security: Check for admin key in environment
+    const adminKey = process.env.ADMIN_KEY;
+    const providedKey = req.headers['x-admin-key'];
+    
+    if (!adminKey || providedKey !== adminKey) {
+      return errorResponse(res, "Unauthorized - Admin key required", 401);
+    }
+
+    const db = getDb();
+    if (!db) {
+      return errorResponse(res, "Service temporarily unavailable", 503);
+    }
+
+    const shopItemsData = require("../data/shopItems.json");
+    const shopCollection = db.collection('shopItems');
+    
+    let imported = 0;
+    let updated = 0;
+
+    for (const item of shopItemsData) {
+      const docRef = shopCollection.doc(item.id);
+      const docSnapshot = await docRef.get();
+      
+      if (docSnapshot.exists) {
+        await docRef.update(item);
+        updated++;
+      } else {
+        await docRef.set(item);
+        imported++;
+      }
+    }
+
+    console.log(`Shop items initialized: ${imported} imported, ${updated} updated`);
+    
+    return res.status(200).json({
+      success: true,
+      message: "Shop items initialized successfully",
+      stats: {
+        imported,
+        updated,
+        total: imported + updated
+      }
+    });
+  } catch (err) {
+    console.error("Error initializing shop items:", err.message);
+    return errorResponse(res, err.message || "Failed to initialize shop items", 500);
+  }
+}
+
+module.exports = { listItems, redeem, getTransactions, initShopItems };

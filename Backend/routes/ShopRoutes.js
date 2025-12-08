@@ -13,4 +13,7 @@ router.post('/api/shop/redeem', authLimiter, verifyToken, controller.redeem);
 // Get user's purchase transactions (auth required)
 router.get('/api/shop/transactions/:userId', authLimiter, verifyToken, controller.getTransactions);
 
+// Initialize shop items in Firestore (admin only - requires ADMIN_KEY header)
+router.post('/api/shop/admin/init', controller.initShopItems);
+
 module.exports = router;
