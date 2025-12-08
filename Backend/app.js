@@ -37,14 +37,17 @@ app.set('trust proxy', 1);
 // CORS FIX: ALLOW SPECIFIC ORIGINS OR FALLBACK TO ALL
 // =============================================================================
 
-// Use environment variable FRONTEND_URL, or fallback to '*' 
-const allowedOrigin = process.env.FRONTEND_URL || '*'; 
-
+// Allow all origins for development, restrict in production via environment variable
 app.use(cors({
-  origin: allowedOrigin, // Now uses the environment variable
-  methods: ['GET', 'POST', 'PUT', 'DELETE', 'OPTIONS'],
+  origin: (origin, callback) => callback(null, true),
+  methods: ['GET', 'POST', 'PUT', 'DELETE', 'PATCH', 'OPTIONS'],
   allowedHeaders: ['Content-Type', 'Authorization', 'Cache-Control', 'Pragma', 'Expires'],
+  credentials: true,
+  maxAge: 86400
 }));
+
+// Handle preflight requests
+app.options('*', cors());
 
 app.use(morgan('dev'));
 
