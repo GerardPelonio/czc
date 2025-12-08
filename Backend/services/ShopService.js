@@ -2,6 +2,7 @@
 
 const admin = require("firebase-admin");
 const { getDb, getFieldValue, serverTimestampOrDate } = require('../utils/getDb');
+const shopItemsData = require("../data/shopItems.json");
 
 const SHOP_COLLECTION = "shopItems"; 
 const STUDENTS_COLLECTION = "students"; 
@@ -19,35 +20,69 @@ const err = (msg, status = 400) => {
 async function listItems(db, { page = 1, limit = 20 }) {
   if (!db) throw err('Database not initialized', 503);
   
-  const shopCollection = db.collection(SHOP_COLLECTION); 
-  
-  const offset = (page - 1) * limit;
-  
   try {
-    const snapshot = await shopCollection
-      .orderBy('cost', 'asc') 
-      .limit(limit)
-      .offset(offset)
-      .get();
+    const shopCollection = db.collection(SHOP_COLLECTION);
+    const offset = (page - 1) * limit;
+    
+    // Check if Firestore collection has items
+    let snapshot;
+    try {
+      snapshot = await shopCollection
+        .orderBy('cost', 'asc') 
+        .limit(limit)
+        .offset(offset)
+        .get();
+    } catch (orderErr) {
+      // If ordering fails (no items or index issue), try without ordering
+      console.warn("OrderBy failed, trying without ordering", orderErr.message);
+      snapshot = await shopCollection
+        .limit(limit)
+        .offset(offset)
+        .get();
+    }
 
-    const items = snapshot.docs.map(doc => ({
+    let items = snapshot.docs.map(doc => ({
       itemId: doc.id,
       ...doc.data()
     }));
 
-    // Get total count
-    const totalSnap = await shopCollection.count().get();
-    const totalCount = totalSnap.data().count || 0;
+    // If no items in Firestore, fallback to JSON data
+    if (items.length === 0 && !snapshot.empty === false) {
+      console.log("No items in Firestore, using fallback JSON data");
+      const start = offset;
+      const end = start + limit;
+      items = shopItemsData
+        .sort((a, b) => a.cost - b.cost)
+        .slice(start, end)
+        .map(item => ({ itemId: item.id, ...item }));
+    }
+
+    // Get total count with fallback
+    let totalCount = 0;
+    try {
+      const countSnap = await shopCollection.count().get();
+      totalCount = countSnap.data().count || 0;
+    } catch (countErr) {
+      // Fallback: get all items and count (less efficient but works)
+      console.warn("Count aggregation not available, using fallback", countErr.message);
+      const allSnap = await shopCollection.get();
+      totalCount = allSnap.size;
+    }
+
+    // If Firestore is empty, use JSON data count
+    if (totalCount === 0 && shopItemsData.length > 0) {
+      totalCount = shopItemsData.length;
+    }
 
     return {
       items,
       page,
       limit,
       totalCount,
-      totalPages: Math.ceil(totalCount / limit),
+      totalPages: totalCount > 0 ? Math.ceil(totalCount / limit) : 1,
     };
   } catch (error) {
-    console.error("Error listing shop items:", error.message);
+    console.error("Error listing shop items:", error.message, error);
     throw err(error.message || "Failed to list shop items", 500);
   }
 }
@@ -75,12 +110,22 @@ async function getTransactions(db, userId, { page = 1, limit = 50 }) {
         ...doc.data()
       }));
 
-      // Get total count
-      const totalSnap = await db.collection(TRANSACTIONS_COLLECTION)
-        .where('userId', '==', userId)
-        .count()
-        .get();
-      const totalCount = totalSnap.data().count || 0;
+      // Get total count using aggregation or fallback
+      let totalCount = 0;
+      try {
+        const countSnap = await db.collection(TRANSACTIONS_COLLECTION)
+          .where('userId', '==', userId)
+          .count()
+          .get();
+        totalCount = countSnap.data().count || 0;
+      } catch (countErr) {
+        // Fallback: get all user transactions and count
+        console.warn("Count aggregation not available, using fallback", countErr.message);
+        const allSnap = await db.collection(TRANSACTIONS_COLLECTION)
+          .where('userId', '==', userId)
+          .get();
+        totalCount = allSnap.size;
+      }
 
       return {
         transactions,
@@ -114,10 +159,16 @@ async function redeemItem(db, userId, itemId) {
       ]);
 
       if (!studentSnap.exists) throw err("Student profile not found", 404);
-      if (!itemSnap.exists) throw err("Shop item not found", 404);
+      
+      // Fallback to JSON data if item not in Firestore
+      let item = itemSnap.data();
+      if (!item) {
+        item = shopItemsData.find(i => i.id === itemId);
+        if (!item) throw err("Shop item not found", 404);
+        console.log(`Using fallback item data for ${itemId} from JSON`);
+      }
 
       const student = studentSnap.data();
-      const item = itemSnap.data();
 
       // Check coins
       const studentCoins = student.coins || 0;
