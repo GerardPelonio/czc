@@ -1,0 +1,84 @@
+{
+  "shopItems": [
+    {
+      "id": "double-xp",
+      "name": "Double XP",
+      "description": "Earn double XP for 24 hours",
+      "rarity": "rare",
+      "cost": 500,
+      "type": "boost",
+      "duration": 86400,
+      "icon": "Zap"
+    },
+    {
+      "id": "damage-shield",
+      "name": "Damage Shield",
+      "description": "Reduce challenge penalties",
+      "rarity": "uncommon",
+      "cost": 300,
+      "type": "boost",
+      "uses": 1,
+      "icon": "Shield"
+    },
+    {
+      "id": "focus-boost",
+      "name": "Focus Boost",
+      "description": "Highlight key words while reading",
+      "rarity": "common",
+      "cost": 200,
+      "type": "boost",
+      "uses": 1,
+      "icon": "Brain"
+    },
+    {
+      "id": "time-freeze",
+      "name": "Time Freeze",
+      "description": "Pause timers during challenges",
+      "rarity": "epic",
+      "cost": 400,
+      "type": "boost",
+      "duration": 3600,
+      "icon": "Clock"
+    },
+    {
+      "id": "goal-lock",
+      "name": "Goal Lock",
+      "description": "Lock target words to highlight",
+      "rarity": "uncommon",
+      "cost": 250,
+      "type": "boost",
+      "uses": 1,
+      "icon": "Target"
+    },
+    {
+      "id": "reading-booster",
+      "name": "Reading Booster",
+      "description": "Small XP boost on reading",
+      "rarity": "common",
+      "cost": 150,
+      "type": "boost",
+      "uses": 1,
+      "icon": "Book"
+    },
+    {
+      "id": "spark-burst",
+      "name": "Spark Burst",
+      "description": "Instant hint in quizzes",
+      "rarity": "rare",
+      "cost": 350,
+      "type": "boost",
+      "uses": 1,
+      "icon": "Sparkles"
+    },
+    {
+      "id": "flame-armor",
+      "name": "Flame Armor",
+      "description": "Negate one penalty in challenges",
+      "rarity": "legendary",
+      "cost": 600,
+      "type": "boost",
+      "uses": 1,
+      "icon": "Flame"
+    }
+  ]
+}

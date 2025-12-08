@@ -1,53 +1,109 @@
 const ShopService = require("../services/ShopService");
+const { getDb } = require("../utils/getDb");
+
+const errorResponse = (res, message, status = 400) => {
+  return res.status(status).json({ success: false, message });
+};
 
 async function listItems(req, res) {
+  const userId = req.user?.id;
+  const { page = 1, limit = 20 } = req.query;
+
+  // userId is optional - can browse without auth, but recommended
+  
   try {
-    const { page = 1, limit = 20 } = req.query;
-    const result = await ShopService.listItems({ page: Number(page), limit: Number(limit) });
+    const db = getDb();
+    if (!db) {
+      return errorResponse(res, "Service temporarily unavailable", 503);
+    }
+
+    const result = await ShopService.listItems(db, { page: Number(page), limit: Number(limit) });
     
-    // FIX 1: Destructure to remove the 'items' array from the pagination metadata
+    // Destructure to separate items from pagination metadata
     const { items, ...paginationMetadata } = result;
 
-    return res.status(200).json({ success: true, data: items, pagination: paginationMetadata });
+    return res.status(200).json({ 
+      success: true, 
+      data: items, 
+      pagination: paginationMetadata 
+    });
   } catch (err) {
-    return res.status(500).json({ success: false, message: err.message || "Failed to list items" });
+    console.error("Error in listItems:", err.message);
+    return errorResponse(res, err.message || "Failed to list items", 500);
   }
 }
 
 async function redeem(req, res) {
-  try {
-    const { itemId } = req.body;
-    const userId = req.body.userId || req.headers["x-user-id"];
+  const userId = req.user?.id;
+  const { itemId } = req.body;
 
-    if (!userId || !itemId) {
-      return res.status(400).json({ success: false, message: "userId and itemId are required" });
+  if (!userId) {
+    return errorResponse(res, "Authentication required to purchase items", 401);
+  }
+
+  if (!itemId) {
+    return errorResponse(res, "Item ID is required", 400);
+  }
+
+  try {
+    const db = getDb();
+    if (!db) {
+      return errorResponse(res, "Service temporarily unavailable", 503);
     }
 
-    const result = await ShopService.redeemItem(userId, itemId);
+    const result = await ShopService.redeemItem(db, userId, itemId);
 
-    return res.status(200).json({ success: true, message: "Item redeemed successfully!", data: result });
+    return res.status(200).json({ 
+      success: true, 
+      message: `Successfully purchased item! Coins remaining: ${result.coinsRemaining}`,
+      data: result 
+    });
   } catch (err) {
-    // Note: The service layer should throw an error with the exact message 
-    // for this array check to work correctly.
-    const clientErrors = ["insufficient coins", "already purchased", "not found"];
-    const isClientError = clientErrors.some(e => err.message.toLowerCase().includes(e));
-    return res.status(isClientError ? 400 : 500).json({ success: false, message: err.message || "Failed to redeem item" });
+    console.error("Error in redeem:", err.message);
+    
+    let status = 500;
+    if (err.message.includes("Insufficient") || err.message.includes("already")) {
+      status = 400;
+    } else if (err.message.includes("not found")) {
+      status = 404;
+    } else if (err.message.includes("Authentication")) {
+      status = 401;
+    }
+    
+    return errorResponse(res, err.message || "Failed to redeem item", status);
   }
 }
 
 async function getTransactions(req, res) {
-  try {
-    const { userId } = req.params;
-    const { page = 1, limit = 50 } = req.query;
+  const userId = req.user?.id;
+  const { page = 1, limit = 50 } = req.query;
 
-    const result = await ShopService.getTransactions(userId, { page: Number(page), limit: Number(limit) });
+  if (!userId) {
+    return errorResponse(res, "Authentication required", 401);
+  }
+
+  try {
+    const db = getDb();
+    if (!db) {
+      return errorResponse(res, "Service temporarily unavailable", 503);
+    }
+
+    const result = await ShopService.getTransactions(db, userId, { 
+      page: Number(page), 
+      limit: Number(limit) 
+    });
     
-    // FIX 2: Destructure to remove the 'transactions' array from the pagination metadata
+    // Destructure to separate transactions from pagination metadata
     const { transactions, ...paginationMetadata } = result;
 
-    return res.status(200).json({ success: true, data: transactions, pagination: paginationMetadata });
+    return res.status(200).json({ 
+      success: true, 
+      data: transactions, 
+      pagination: paginationMetadata 
+    });
   } catch (err) {
-    return res.status(500).json({ success: false, message: err.message || "Failed to fetch transactions" });
+    console.error("Error in getTransactions:", err.message);
+    return errorResponse(res, err.message || "Failed to fetch transactions", 500);
   }
 }
 
