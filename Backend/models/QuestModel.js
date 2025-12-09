@@ -29,8 +29,23 @@ async function getUserQuestProgress(db, userId) {
             if (studentDoc.exists) {
                 const studentData = studentDoc.data();
                 const booksRead = (studentData.booksRead || []).length;
+                const booksReadIds = studentData.booksRead || [];
                 const quizzesCompleted = (studentData.quizzesCompleted || []).length;
                 const bookReadingTimes = studentData.bookReadingTimes || {}; // Maps bookId to {startTime, completionTime}
+                
+                // Fetch book details to get genres
+                let bookGenres = {};
+                try {
+                    for (const bookId of booksReadIds) {
+                        const bookDoc = await db.collection('books').doc(bookId).get();
+                        if (bookDoc.exists) {
+                            const bookData = bookDoc.data();
+                            bookGenres[bookId] = bookData.genre || 'unknown';
+                        }
+                    }
+                } catch (err) {
+                    console.warn("Could not fetch book genres:", err.message);
+                }
                 
                 // Fetch all quests to map triggers to quest IDs
                 const questsRef = db.collection('quests');
@@ -69,6 +84,18 @@ async function getUserQuestProgress(db, userId) {
                             }
                         }
                         currentProgress = fastBooksCount;
+                    } else if (trigger === 'genre_variety') {
+                        // Count unique genres read
+                        const uniqueGenres = new Set(Object.values(bookGenres));
+                        currentProgress = uniqueGenres.size;
+                    } else if (trigger === 'genre_books') {
+                        // Count books of a specific genre
+                        const targetGenre = questData.genre;
+                        if (targetGenre) {
+                            currentProgress = Object.values(bookGenres).filter(g => 
+                                g && g.toLowerCase() === targetGenre.toLowerCase()
+                            ).length;
+                        }
                     } else if (progressMap[questId]) {
                         // For other trigger types, use stored progress if it exists
                         currentProgress = progressMap[questId].currentProgress || 0;

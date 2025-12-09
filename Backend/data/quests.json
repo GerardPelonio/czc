@@ -24,5 +24,46 @@
     "order": 2,
     "createdAt": "2025-12-08T15:27:09.800Z",
     "updatedAt": "2025-12-08T15:27:09.800Z"
+  },
+  {
+    "questId": "genre-explorer",
+    "title": "Genre Explorer",
+    "description": "Read books from 3 different genres",
+    "trigger": "genre_variety",
+    "target": 3,
+    "rewardCoins": 150,
+    "rarity": "uncommon",
+    "type": "reading",
+    "order": 3,
+    "createdAt": "2025-12-08T15:27:09.800Z",
+    "updatedAt": "2025-12-08T15:27:09.800Z"
+  },
+  {
+    "questId": "classic-literature-fan",
+    "title": "Classic Literature Fan",
+    "description": "Read 3 classic literature books",
+    "trigger": "genre_books",
+    "target": 3,
+    "rewardCoins": 350,
+    "rarity": "uncommon",
+    "type": "reading",
+    "genre": "classic",
+    "order": 4,
+    "createdAt": "2025-12-08T15:27:09.800Z",
+    "updatedAt": "2025-12-08T15:27:09.800Z"
+  },
+  {
+    "questId": "non-fiction-navigator",
+    "title": "Non-fiction Navigator",
+    "description": "Read a non-fiction book",
+    "trigger": "genre_books",
+    "target": 1,
+    "rewardCoins": 150,
+    "rarity": "uncommon",
+    "type": "reading",
+    "genre": "non-fiction",
+    "order": 5,
+    "createdAt": "2025-12-08T15:27:09.800Z",
+    "updatedAt": "2025-12-08T15:27:09.800Z"
   }
 ]
