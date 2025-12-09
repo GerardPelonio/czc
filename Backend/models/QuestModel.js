@@ -36,13 +36,18 @@ async function getUserQuestProgress(db, userId) {
                 // Fetch book details to get genres
                 let bookGenres = {};
                 try {
+                    console.log(`[QuestModel] Fetching genres for ${booksReadIds.length} books:`, booksReadIds);
                     for (const bookId of booksReadIds) {
                         const storyDoc = await db.collection('stories').doc(bookId).get();
                         if (storyDoc.exists) {
                             const storyData = storyDoc.data();
                             bookGenres[bookId] = storyData.genre || 'unknown';
+                            console.log(`[QuestModel] Book ${bookId}: genre="${storyData.genre}"`);
+                        } else {
+                            console.warn(`[QuestModel] Story not found: ${bookId}`);
                         }
                     }
+                    console.log(`[QuestModel] Final bookGenres map:`, bookGenres);
                 } catch (err) {
                     console.warn("Could not fetch book genres:", err.message);
                 }
@@ -88,6 +93,7 @@ async function getUserQuestProgress(db, userId) {
                         // Count unique genres read
                         const uniqueGenres = new Set(Object.values(bookGenres));
                         currentProgress = uniqueGenres.size;
+                        console.log(`[${questData.title}] genre_variety: bookGenres=${JSON.stringify(bookGenres)}, uniqueGenres=${Array.from(uniqueGenres)}, progress=${currentProgress}`);
                     } else if (trigger === 'genre_books') {
                         // Count books of a specific genre
                         const targetGenre = questData.genre;
@@ -95,6 +101,7 @@ async function getUserQuestProgress(db, userId) {
                             currentProgress = Object.values(bookGenres).filter(g => 
                                 g && g.toLowerCase() === targetGenre.toLowerCase()
                             ).length;
+                            console.log(`[${questData.title}] genre_books: targetGenre=${targetGenre}, bookGenres=${JSON.stringify(bookGenres)}, progress=${currentProgress}`);
                         }
                     } else if (progressMap[questId]) {
                         // For other trigger types, use stored progress if it exists
