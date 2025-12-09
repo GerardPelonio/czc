@@ -57,6 +57,7 @@ async function getStoryById(req, res) {
             id: cachedBook.id,
             title: cachedBook.title,
             author: cachedBook.author,
+            genre: cachedBook.genre || 'unknown',
             content: cachedBook.content, // Use the pre-validated content
             source: 'local_cache',
             source_id: cachedBook.id.startsWith("GB") ? cachedBook.id.slice(2) : cachedBook.id,
