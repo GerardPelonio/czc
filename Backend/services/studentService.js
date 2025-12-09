@@ -25,7 +25,8 @@ async function createProfile(userId, data = {}) {
     avatarUrl: data.avatarUrl || '',
     unlockedItems: Array.isArray(data.unlockedItems) ? data.unlockedItems : [],
     booksRead: Array.isArray(data.booksRead) ? data.booksRead : [],
-    booksReadCount: Number(data.booksReadCount || (Array.isArray(data.booksRead) ? data.booksRead.length : 0)) // initialize counter
+    booksReadCount: Number(data.booksReadCount || (Array.isArray(data.booksRead) ? data.booksRead.length : 0)), // initialize counter
+    bookmarks: Array.isArray(data.bookmarks) ? data.bookmarks : []
   };
   await ref.set(payload, { merge: true });
   const snap = await ref.get();
@@ -80,11 +81,20 @@ async function addBookmark(userId, storyId) {
   const db = getDb();
   if (!db) throw new Error('Firestore not initialized (missing credentials or emulator).');
   const ref = db.collection(COLLECTION).doc(userId);
-  await ref.update({
-    bookmarks: firebase.firestore.FieldValue.arrayUnion(storyId)
-  });
+  
+  // Check if document exists
   const snap = await ref.get();
-  return snap.exists ? snap.data().bookmarks : [];
+  if (!snap.exists) {
+    throw new Error('Student profile not found');
+  }
+  
+  // Use set with merge to handle missing bookmarks field
+  await ref.set({
+    bookmarks: firebase.firestore.FieldValue.arrayUnion(storyId)
+  }, { merge: true });
+  
+  const updatedSnap = await ref.get();
+  return updatedSnap.exists ? (updatedSnap.data().bookmarks || []) : [];
 }
 
 async function removeBookmark(userId, storyId) {
@@ -92,11 +102,20 @@ async function removeBookmark(userId, storyId) {
   const db = getDb();
   if (!db) throw new Error('Firestore not initialized (missing credentials or emulator).');
   const ref = db.collection(COLLECTION).doc(userId);
-  await ref.update({
-    bookmarks: firebase.firestore.FieldValue.arrayRemove(storyId)
-  });
+  
+  // Check if document exists
   const snap = await ref.get();
-  return snap.exists ? snap.data().bookmarks : [];
+  if (!snap.exists) {
+    throw new Error('Student profile not found');
+  }
+  
+  // Use set with merge to handle missing bookmarks field
+  await ref.set({
+    bookmarks: firebase.firestore.FieldValue.arrayRemove(storyId)
+  }, { merge: true });
+  
+  const updatedSnap = await ref.get();
+  return updatedSnap.exists ? (updatedSnap.data().bookmarks || []) : [];
 }
 
 async function getBookmarks(userId) {
