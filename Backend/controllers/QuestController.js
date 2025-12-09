@@ -531,6 +531,43 @@ async function deleteAllQuests(req, res) {
   }
 }
 
+async function deleteQuest(req, res) {
+  try {
+    const { questId } = req.params;
+    
+    if (!questId) {
+      return res.status(400).json({
+        success: false,
+        message: "questId is required"
+      });
+    }
+
+    const db = req.app.locals.db || getDb();
+    if (!db) {
+      return res.status(503).json({
+        success: false,
+        message: "Service temporarily unavailable - Database not initialized"
+      });
+    }
+
+    await db.collection('quests').doc(questId).delete();
+
+    console.log(`Quest deleted: ${questId}`);
+    
+    return res.status(200).json({
+      success: true,
+      message: `Quest '${questId}' deleted successfully`
+    });
+  } catch (error) {
+    console.error('Error deleting quest:', error);
+    return res.status(500).json({
+      success: false,
+      message: 'Failed to delete quest',
+      error: error.message
+    });
+  }
+}
+
 module.exports = {
     getQuestsProgress,
     completeQuest,
@@ -539,5 +576,6 @@ module.exports = {
     updateQuestProgress,
     fixQuestTargets,
     initQuests,
-    deleteAllQuests
+    deleteAllQuests,
+    deleteQuest
 };
