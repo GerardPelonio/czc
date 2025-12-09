@@ -108,6 +108,6 @@ connectFirebase()
     }
 
     app.listen(PORT, () =>
-      console.log(`Server running on http://localhost:${PORT} (Firestore NOT connected, using fallbacks)`),
+      console.log(`Server running on http://localhost:${PORT} (Firestore NOT connected, using fallbacks)`)
     );
   });

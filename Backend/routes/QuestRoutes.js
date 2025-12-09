@@ -16,6 +16,6 @@ router.get('/api/user/coins', verifyToken, controller.getUserCoins);
 router.post('/api/user/add-coins', authLimiter, verifyToken, controller.addCoins);
 
 // Admin routes
-router.post('/api/quest/admin/init', controller.initQuests);
+// router.post('/api/quest/admin/init', controller.initQuests); // DISABLED - Auto-initialization disabled
 
 module.exports = router;

@@ -25,51 +25,96 @@ async function getStreak(userId) {
   const ref = await getRef(userId);
   const snap = await ref.get();
   const data = snap.exists ? snap.data() : {};
+  
+  // Calculate consecutive days from daily activity map
+  const activeDays = data.activeDays || {};
+  let consecutiveDays = 0;
+  // Start from today in UTC
+  let current = new Date(Date.UTC(
+    new Date().getUTCFullYear(),
+    new Date().getUTCMonth(),
+    new Date().getUTCDate()
+  ));
+  
+  // Count backwards from today
+  while (true) {
+    const dateKey = toDateKey(current);
+    if (activeDays[dateKey]) {
+      consecutiveDays++;
+      current.setUTCDate(current.getUTCDate() - 1);
+    } else {
+      break;
+    }
+  }
+  
   return {
     lastDate: data.lastDate || null,
-    currentStreak: data.currentStreak || 0,
+    currentStreak: consecutiveDays, // Use calculated consecutive days instead of stored counter
     longestStreak: data.longestStreak || 0,
     badges: Array.isArray(data.badges) ? data.badges : [],
-    updatedAt: data.updatedAt || null
+    updatedAt: data.updatedAt || null,
+    activeDays: activeDays // Include the daily activity map for frontend use
   };
 }
 
 async function recordReadingSession(userId, sessionIso) {
   if (!userId) throw Object.assign(new Error('Missing userId'), { status: 400 });
   const dateKey = sessionIso ? toDateKey(new Date(sessionIso)) : toDateKey();
+  console.log(`[recordReadingSession] userId: ${userId}, sessionIso: ${sessionIso}, computed dateKey: ${dateKey}`);
+  
   const ref = await getRef(userId);
   const snap = await ref.get();
   const data = snap.exists ? snap.data() : {};
 
-  const last = data.lastDate || null;
-  let current = data.currentStreak || 0;
+  // Initialize or get existing daily activity map
+  const activeDays = data.activeDays || {};
+  console.log(`[recordReadingSession] Current activeDays before update:`, Object.keys(activeDays));
+  
+  // Mark this date as active
+  activeDays[dateKey] = true;
+  console.log(`[recordReadingSession] Marked ${dateKey} as active. activeDays after update:`, Object.keys(activeDays));
+
+  // Calculate consecutive days from the daily activity map
+  // Start from today in UTC
+  let current = new Date(Date.UTC(
+    new Date().getUTCFullYear(),
+    new Date().getUTCMonth(),
+    new Date().getUTCDate()
+  ));
+  let consecutiveDays = 0;
+  let checkDays = [];
+  while (true) {
+    const key = toDateKey(current);
+    checkDays.push(`${key}=${activeDays[key] ? 'Y' : 'N'}`);
+    if (activeDays[key]) {
+      consecutiveDays++;
+      current.setUTCDate(current.getUTCDate() - 1);
+    } else {
+      break;
+    }
+  }
+  console.log(`[recordReadingSession] Consecutive check: ${checkDays.join(', ')} → streak=${consecutiveDays}`);
+
+  // Track longest streak for badges/achievements
   let longest = data.longestStreak || 0;
   const badges = Array.isArray(data.badges) ? data.badges.slice() : [];
 
-  if (last === dateKey) {
-    // already recorded today means don't record again
-  } else if (last === yesterdayKey()) {
-    current = (current || 0) + 1;
-  } else {
-    // missed or first record
-    current = 1;
-  }
-
-  if (current > longest) {
-    longest = current;
-    // simple badge logic: unlock at 3,7,30 days will add once achievements are finalized
+  if (consecutiveDays > longest) {
+    longest = consecutiveDays;
+    // Simple badge logic: unlock at 3, 7, 30 days
     const unlocks = [3, 7, 30];
-    if (unlocks.includes(current)) {
-      const badge = `streak-${current}`;
+    if (unlocks.includes(consecutiveDays)) {
+      const badge = `streak-${consecutiveDays}`;
       if (!badges.includes(badge)) badges.push(badge);
     }
   }
 
   const payload = {
     lastDate: dateKey,
-    currentStreak: current,
+    currentStreak: consecutiveDays, // Store calculated consecutive days
     longestStreak: longest,
     badges,
+    activeDays: activeDays, // Store the daily activity map
     updatedAt: require('../utils/getDb').serverTimestampOrDate()
   };
 

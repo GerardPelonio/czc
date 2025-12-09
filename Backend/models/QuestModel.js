@@ -32,22 +32,6 @@ async function getUserQuestProgress(db, userId) {
                 const quizzesCompleted = (studentData.quizzesCompleted || []).length;
                 const bookReadingTimes = studentData.bookReadingTimes || {}; // Maps bookId to {startTime, completionTime}
                 
-                // Fetch streak data once outside the loop
-                let streakData = { currentStreak: 0 };
-                try {
-                    const currentStreakDoc = await db.collection('users').doc(userId).collection('streaks').doc('current').get();
-                    if (currentStreakDoc.exists) {
-                        streakData = currentStreakDoc.data();
-                    } else {
-                        const rootStreakDoc = await db.collection('streaks').doc(userId).get();
-                        if (rootStreakDoc.exists) {
-                            streakData = rootStreakDoc.data();
-                        }
-                    }
-                } catch (streakErr) {
-                    console.warn(`Could not fetch streak data for user ${userId}:`, streakErr.message);
-                }
-                
                 // Fetch all quests to map triggers to quest IDs
                 const questsRef = db.collection('quests');
                 const questsSnapshot = await questsRef.get();
@@ -56,6 +40,8 @@ async function getUserQuestProgress(db, userId) {
                     const questId = questDoc.id;
                     const questData = questDoc.data();
                     const trigger = questData.trigger;
+                    
+                    console.log(`[Quest: ${questData.title}] ID: ${questId}, Trigger: ${trigger}`);
                     
                     // ALWAYS recalculate for dynamic triggers, don't use stored progress
                     let currentProgress = 0;
@@ -83,9 +69,6 @@ async function getUserQuestProgress(db, userId) {
                             }
                         }
                         currentProgress = fastBooksCount;
-                    } else if (trigger === 'streak_days') {
-                        // Use the pre-fetched streak data
-                        currentProgress = Math.max(0, streakData.currentStreak || 0);
                     } else if (progressMap[questId]) {
                         // For other trigger types, use stored progress if it exists
                         currentProgress = progressMap[questId].currentProgress || 0;

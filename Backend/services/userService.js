@@ -4,8 +4,9 @@ const { getDb } = require('../utils/getDb');
 const { COLLECTION } = require('../models/userModel');
 const bcrypt = require('bcrypt');
 const jwt = require('jsonwebtoken');
+const { demoRegisterUser, demoAuthenticateUser } = require('./demoAuthService');
 
-const jwtKey = process.env.JWT_KEY || null;
+const jwtKey = process.env.JWT_KEY || 'demo-key';
 
 const err = (msg, status = 400) => { const e = new Error(msg); e.status = status; throw e; };
 
@@ -38,7 +39,13 @@ async function changePassword(userId, currentPassword, newPassword) {
 
 async function registerUser({ username, email, password, id, role }) {
   const db = getDb();
-  if (!db) throw Object.assign(new Error('Firestore not initialized (missing credentials or emulator).'), { status: 500 });
+  
+  // Use demo auth if Firebase is not initialized
+  if (!db) {
+    console.warn('Using demo auth (Firebase not available)');
+    return await demoRegisterUser({ username, email, password, id, role });
+  }
+
   const users = db.collection(COLLECTION);
 
   // Check for existing email and username
@@ -73,7 +80,13 @@ async function registerUser({ username, email, password, id, role }) {
 
 async function authenticateUser(email, password, role) {
   const db = getDb();
-  if (!db) throw Object.assign(new Error('Firestore not initialized (missing credentials or emulator).'), { status: 500 });
+  
+  // Use demo auth if Firebase is not initialized
+  if (!db) {
+    console.warn('Using demo auth (Firebase not available)');
+    return await demoAuthenticateUser(email, password, role);
+  }
+
   let q = db.collection(COLLECTION).where('email', '==', email).limit(1);
 
   const roleNorm = normalizeRole(role);
