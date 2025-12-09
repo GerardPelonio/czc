@@ -37,10 +37,10 @@ async function getUserQuestProgress(db, userId) {
                 let bookGenres = {};
                 try {
                     for (const bookId of booksReadIds) {
-                        const bookDoc = await db.collection('books').doc(bookId).get();
-                        if (bookDoc.exists) {
-                            const bookData = bookDoc.data();
-                            bookGenres[bookId] = bookData.genre || 'unknown';
+                        const storyDoc = await db.collection('stories').doc(bookId).get();
+                        if (storyDoc.exists) {
+                            const storyData = storyDoc.data();
+                            bookGenres[bookId] = storyData.genre || 'unknown';
                         }
                     }
                 } catch (err) {
