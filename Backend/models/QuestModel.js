@@ -1,6 +1,8 @@
 // Backend/models/QuestModel.js
 
 // NO getDb IMPORT HERE - We use dependency injection
+const fs = require('fs');
+const path = require('path');
 
 async function getUserQuestProgress(db, userId) {
     // Safety check
@@ -33,23 +35,30 @@ async function getUserQuestProgress(db, userId) {
                 const quizzesCompleted = (studentData.quizzesCompleted || []).length;
                 const bookReadingTimes = studentData.bookReadingTimes || {}; // Maps bookId to {startTime, completionTime}
                 
-                // Fetch book details to get genres
+                // Fetch book details to get genres from cache
                 let bookGenres = {};
                 try {
                     console.log(`[QuestModel] Fetching genres for ${booksReadIds.length} books:`, booksReadIds);
+                    
+                    // Load the cache file
+                    const cacheFilePath = path.join(__dirname, '../data/perfect-books-cache.json');
+                    const cacheData = JSON.parse(fs.readFileSync(cacheFilePath, 'utf-8'));
+                    
+                    // Build a map of book IDs to genres from cache
+                    const cacheGenreMap = {};
+                    cacheData.forEach(book => {
+                        cacheGenreMap[book.id] = book.genre || 'unknown';
+                    });
+                    
+                    // Get genres for the books read
                     for (const bookId of booksReadIds) {
-                        const storyDoc = await db.collection('stories').doc(bookId).get();
-                        if (storyDoc.exists) {
-                            const storyData = storyDoc.data();
-                            bookGenres[bookId] = storyData.genre || 'unknown';
-                            console.log(`[QuestModel] Book ${bookId}: genre="${storyData.genre}"`);
-                        } else {
-                            console.warn(`[QuestModel] Story not found: ${bookId}`);
-                        }
+                        const genre = cacheGenreMap[bookId] || 'unknown';
+                        bookGenres[bookId] = genre;
+                        console.log(`[QuestModel] Book ${bookId}: genre="${genre}"`);
                     }
                     console.log(`[QuestModel] Final bookGenres map:`, bookGenres);
                 } catch (err) {
-                    console.warn("Could not fetch book genres:", err.message);
+                    console.warn("Could not fetch book genres from cache:", err.message);
                 }
                 
                 // Fetch all quests to map triggers to quest IDs
