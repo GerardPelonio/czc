@@ -1,1 +1,28 @@
-[]
+[
+  {
+    "questId": "reading-marathon",
+    "title": "Reading Marathon",
+    "description": "Read 5 books this month",
+    "trigger": "books_read",
+    "target": 5,
+    "rewardCoins": 100,
+    "rarity": "uncommon",
+    "type": "reading",
+    "order": 1,
+    "createdAt": "2025-12-08T15:27:09.800Z",
+    "updatedAt": "2025-12-08T15:27:09.800Z"
+  },
+  {
+    "questId": "speed-reader",
+    "title": "Speed Reader",
+    "description": "Complete a book in one week",
+    "trigger": "fast_reader",
+    "target": 1,
+    "rewardCoins": 50,
+    "rarity": "uncommon",
+    "type": "reading",
+    "order": 2,
+    "createdAt": "2025-12-08T15:27:09.800Z",
+    "updatedAt": "2025-12-08T15:27:09.800Z"
+  }
+]
