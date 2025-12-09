@@ -17,5 +17,6 @@ router.post('/api/user/add-coins', authLimiter, verifyToken, controller.addCoins
 
 // Admin routes
 // router.post('/api/quest/admin/init', controller.initQuests); // DISABLED - Auto-initialization disabled
+router.delete('/api/quest/admin/delete-all', controller.deleteAllQuests);
 
 module.exports = router;
