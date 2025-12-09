@@ -1,12 +1,10 @@
 // Backend/services/QuestService.js
 
 const QuestModel = require('../models/QuestModel');
-const { addCoinsToUser } = require('./userService');
-const path = require('path');
-const fs = require('fs');
+const { addCoinsToUser } = require('./userService'); 
 
 /**
- * Fetch all quests from Firestore, with fallback to JSON file if empty
+ * Fetch all quests from Firestore
  */
 async function getQuestsFromFirestore(db) {
     try {
@@ -41,52 +39,13 @@ async function getQuestsFromFirestore(db) {
             });
         });
         
-        // If Firestore is empty, fallback to JSON file
-        if (quests.length === 0) {
-            console.warn("No quests in Firestore, loading from JSON fallback");
-            try {
-                const questsPath = path.join(__dirname, '../data/quests.json');
-                const questsData = JSON.parse(fs.readFileSync(questsPath, 'utf-8'));
-                
-                return questsData.map(quest => ({
-                    id: quest.questId,
-                    title: quest.title,
-                    description: quest.description,
-                    targetProgress: Number(quest.target) || 1,
-                    reward: Number(quest.rewardCoins) || 0,
-                    trigger: quest.trigger,
-                    order: quest.order || 0
-                })).sort((a, b) => (a.order || 0) - (b.order || 0));
-            } catch (fileErr) {
-                console.error("Error reading quests.json fallback:", fileErr.message);
-                return [];
-            }
-        }
-        
         // Sort by order
         quests.sort((a, b) => (a.order || 0) - (b.order || 0));
         
         return quests;
     } catch (error) {
         console.error("Error fetching quests from Firestore:", error.message);
-        // Try JSON fallback on error too
-        try {
-            const questsPath = path.join(__dirname, '../data/quests.json');
-            const questsData = JSON.parse(fs.readFileSync(questsPath, 'utf-8'));
-            
-            return questsData.map(quest => ({
-                id: quest.questId,
-                title: quest.title,
-                description: quest.description,
-                targetProgress: Number(quest.target) || 1,
-                reward: Number(quest.rewardCoins) || 0,
-                trigger: quest.trigger,
-                order: quest.order || 0
-            })).sort((a, b) => (a.order || 0) - (b.order || 0));
-        } catch (fileErr) {
-            console.error("Error reading quests.json fallback:", fileErr.message);
-            return [];
-        }
+        return [];
     }
 }
 

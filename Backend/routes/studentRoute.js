@@ -14,4 +14,9 @@ router.delete('/api/student/profile/:id', verifyToken, requireRole('student'), c
 // Mark book as finished
 router.post('/api/student/finish-book', verifyToken, requireRole('student'), controller.markBookFinished);
 
+// Bookmark routes
+router.post('/api/student/bookmarks/add', verifyToken, requireRole('student'), controller.addBookmark);
+router.post('/api/student/bookmarks/remove', verifyToken, requireRole('student'), controller.removeBookmark);
+router.get('/api/student/bookmarks', verifyToken, requireRole('student'), controller.getBookmarks);
+
 module.exports = router;

@@ -75,4 +75,37 @@ async function deleteProfile(userId) {
   return true;
 }
 
-module.exports = { createProfile, getProfile, getAllProfiles, updateProfile, deleteProfile };
+async function addBookmark(userId, storyId) {
+  if (!userId || !storyId) throw new Error('userId and storyId are required');
+  const db = getDb();
+  if (!db) throw new Error('Firestore not initialized (missing credentials or emulator).');
+  const ref = db.collection(COLLECTION).doc(userId);
+  await ref.update({
+    bookmarks: firebase.firestore.FieldValue.arrayUnion(storyId)
+  });
+  const snap = await ref.get();
+  return snap.exists ? snap.data().bookmarks : [];
+}
+
+async function removeBookmark(userId, storyId) {
+  if (!userId || !storyId) throw new Error('userId and storyId are required');
+  const db = getDb();
+  if (!db) throw new Error('Firestore not initialized (missing credentials or emulator).');
+  const ref = db.collection(COLLECTION).doc(userId);
+  await ref.update({
+    bookmarks: firebase.firestore.FieldValue.arrayRemove(storyId)
+  });
+  const snap = await ref.get();
+  return snap.exists ? snap.data().bookmarks : [];
+}
+
+async function getBookmarks(userId) {
+  if (!userId) throw new Error('userId is required');
+  const db = getDb();
+  if (!db) throw new Error('Firestore not initialized (missing credentials or emulator).');
+  const snap = await db.collection(COLLECTION).doc(userId).get();
+  if (!snap.exists) return [];
+  return snap.data().bookmarks || [];
+}
+
+module.exports = { createProfile, getProfile, getAllProfiles, updateProfile, deleteProfile, addBookmark, removeBookmark, getBookmarks };

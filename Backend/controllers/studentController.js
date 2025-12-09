@@ -139,11 +139,59 @@ async function markBookFinished(req, res) {
   }
 }
 
+async function addBookmark(req, res) {
+  try {
+    const userId = req.user && req.user.id;
+    if (!userId) return res.status(401).json({ success: false, message: 'Unauthorized' });
+    
+    const { storyId } = req.body;
+    if (!storyId) return res.status(400).json({ success: false, message: 'storyId is required' });
+    
+    const bookmarks = await studentService.addBookmark(userId, String(storyId));
+    res.status(200).json({ success: true, message: 'Bookmark added', bookmarks });
+  } catch (error) {
+    const status = error.status || 500;
+    res.status(status).json({ success: false, message: error.message || 'Internal server error' });
+  }
+}
+
+async function removeBookmark(req, res) {
+  try {
+    const userId = req.user && req.user.id;
+    if (!userId) return res.status(401).json({ success: false, message: 'Unauthorized' });
+    
+    const { storyId } = req.body;
+    if (!storyId) return res.status(400).json({ success: false, message: 'storyId is required' });
+    
+    const bookmarks = await studentService.removeBookmark(userId, String(storyId));
+    res.status(200).json({ success: true, message: 'Bookmark removed', bookmarks });
+  } catch (error) {
+    const status = error.status || 500;
+    res.status(status).json({ success: false, message: error.message || 'Internal server error' });
+  }
+}
+
+async function getBookmarks(req, res) {
+  try {
+    const userId = req.user && req.user.id;
+    if (!userId) return res.status(401).json({ success: false, message: 'Unauthorized' });
+    
+    const bookmarks = await studentService.getBookmarks(userId);
+    res.status(200).json({ success: true, bookmarks });
+  } catch (error) {
+    const status = error.status || 500;
+    res.status(status).json({ success: false, message: error.message || 'Internal server error' });
+  }
+}
+
 module.exports = {
   createProfile,
   getAllProfiles,
   getProfile,
   updateProfile,
   deleteProfile,
-  markBookFinished
+  markBookFinished,
+  addBookmark,
+  removeBookmark,
+  getBookmarks
 };
