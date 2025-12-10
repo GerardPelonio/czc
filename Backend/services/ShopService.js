@@ -176,35 +176,19 @@ async function redeemItem(db, userId, itemId) {
         throw err(`Insufficient coins. You have ${studentCoins}, but this item costs ${item.cost}`, 400);
       }
 
-      // Check if already owned (for non-consumable items)
-      const inventory = student.inventory || [];
-      if (item.type !== 'consumable' && inventory.some(i => i.id === itemId)) {
+      // Check if already unlocked (for non-consumable items)
+      const unlockedItems = student.unlockedItems || [];
+      if (item.type !== 'consumable' && unlockedItems.includes(itemId)) {
         throw err("You already own this item", 400);
       }
-
-      // Create inventory entry
-      const entry = {
-        id: itemId,
-        name: item.name || "Unnamed Item",
-        description: item.description || "",
-        type: item.type || "boost",
-        rarity: item.rarity || "common",
-        icon: item.icon || null,
-        cost: item.cost,
-        duration: item.duration || null,
-        uses: item.uses || 1,
-        remainingUses: item.uses || 1,
-        used: false,
-        purchasedAt: new Date().toISOString(),
-      };
 
       const FieldValue = getFieldValue();
       const newCoins = studentCoins - item.cost;
       
-      // Update student document
+      // Update student document with unlocked item
       tx.update(studentRef, {
         coins: FieldValue ? FieldValue.increment(-item.cost) : newCoins,
-        inventory: FieldValue ? FieldValue.arrayUnion(entry) : (Array.isArray(inventory) ? [...inventory, entry] : [entry]),
+        unlockedItems: FieldValue ? FieldValue.arrayUnion(itemId) : (Array.isArray(unlockedItems) ? [...unlockedItems, itemId] : [itemId]),
         updatedAt: FieldValue ? FieldValue.serverTimestamp() : serverTimestampOrDate(),
       });
       
@@ -222,7 +206,8 @@ async function redeemItem(db, userId, itemId) {
 
       return { 
         success: true, 
-        item: entry,
+        itemId: itemId,
+        itemName: item.name,
         coinsRemaining: newCoins,
         message: `Successfully purchased ${item.name}! You have ${newCoins} coins remaining.`
       };
