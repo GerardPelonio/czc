@@ -37,15 +37,21 @@ app.set('trust proxy', 1);
 // CORS FIX: ALLOW ALL ORIGINS
 // This ensures localhost:5173 can talk to your Vercel Backend
 // =============================================================================
-app.use(cors({
-  origin: '*', // Allow any frontend (Localhost or Production)
-  methods: ['GET', 'POST', 'PUT', 'DELETE', 'OPTIONS'],
-  allowedHeaders: ['Content-Type', 'Authorization', 'Cache-Control', 'Pragma', 'Expires'],
+const corsOptions = {
+  origin: function(origin, callback) {
+    // Allow all origins (including requests with no origin, like mobile apps or curl requests)
+    callback(null, true);
+  },
   credentials: false,
-}));
+  methods: ['GET', 'POST', 'PUT', 'DELETE', 'OPTIONS', 'HEAD'],
+  allowedHeaders: ['Content-Type', 'Authorization', 'Cache-Control', 'Pragma', 'Expires'],
+  maxAge: 86400, // 24 hours
+};
 
-// Explicit OPTIONS handler for preflight requests
-app.options('*', cors());
+app.use(cors(corsOptions));
+
+// Explicit OPTIONS handler for all routes (must come AFTER cors middleware)
+app.options('*', cors(corsOptions));
 
 app.use(morgan('dev'));
 
