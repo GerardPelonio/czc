@@ -34,36 +34,34 @@ function cleanGutenbergContent(raw) {
     .replace(/\s+/g, " ")      // Whitespace
     .trim();
 
-  // Extract story (skip headers/footers)
-  const startIdx = text.search(/\*\*\* START OF/i) + 200;
+  // Extract story (skip headers/footers) - but be more lenient
+  const startIdx = Math.max(text.search(/\*\*\* START OF/i), 0);
   const endIdx = text.search(/\*\*\* END OF/i);
-  if (startIdx > 200 && endIdx > startIdx) {
+  if (startIdx >= 0 && endIdx > startIdx) {
     text = text.substring(startIdx, endIdx);
   }
 
-  // Nuke junk
+  // Remove only obvious junk patterns
   const junkPatterns = [
-    /Project Gutenberg|www\.gutenberg\.org|http[s]?:\/\/[^\s]+|E?Book #\d+|Release Date|Produced by|Table of Contents/gi,
-    /^Chapter\s+\d+$/gim,
-    /^\s*\d+\s*$/gm,
+    /Project Gutenberg|www\.gutenberg\.org/gi,
+    /E?Book #\d+|Release Date:/gi,
   ];
   junkPatterns.forEach(p => text = text.replace(p, " "));
 
-  // Keep story lines only
+  // Don't filter short words - keep all content
   text = text
-    .split(" ")
-    .filter(word => word.length > 3)
-    .join(" ")
-    .slice(0, 30000); // Trim to safe size
+    .replace(/\s+/g, " ")
+    .slice(0, 30000) // Trim to safe size
+    .trim();
 
-  return text.trim();
+  return text;
 }
 
 async function generateQuiz(userId, storyId, content, title = "the book", db = null, attempt = 0) {
   await rateLimit();
 
   const cleanText = cleanGutenbergContent(content);
-  if (cleanText.length < 2500) {
+  if (cleanText.length < 1500) {
     throw new Error("Not enough clean book content");
   }
 
