@@ -107,6 +107,9 @@ Return ONLY valid JSON (no extra text):
 
   try {
     console.log(`[Quiz] Calling Gemini API for ${storyId}...`);
+    console.log(`[Quiz] Using model: gemini-2.5-flash-lite`);
+    console.log(`[Quiz] API endpoint: ${GEMINI_URL}`);
+    
     const res = await axios.post(
       `${GEMINI_URL}?key=${GEMINI_API_KEY}`,
       {
@@ -155,8 +158,10 @@ Return ONLY valid JSON (no extra text):
     const status = error?.response?.status;
     const code = error?.code || null;
     const errorMsg = error?.response?.data?.error?.message || error?.message || 'Unknown error';
+    const errorData = error?.response?.data;
     
     console.error(`[Quiz] ❌ Gemini error (status=${status}, code=${code}): ${errorMsg}`);
+    console.error(`[Quiz] Full error response:`, JSON.stringify(errorData, null, 2));
     
     // Handle specific Gemini API errors
     if (status === 403) {
