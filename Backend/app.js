@@ -41,7 +41,11 @@ app.use(cors({
   origin: '*', // Allow any frontend (Localhost or Production)
   methods: ['GET', 'POST', 'PUT', 'DELETE', 'OPTIONS'],
   allowedHeaders: ['Content-Type', 'Authorization', 'Cache-Control', 'Pragma', 'Expires'],
+  credentials: false,
 }));
+
+// Explicit OPTIONS handler for preflight requests
+app.options('*', cors());
 
 app.use(morgan('dev'));
 
