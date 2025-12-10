@@ -28,33 +28,35 @@ async function rateLimit() {
 function cleanGutenbergContent(raw) {
   if (!raw || typeof raw !== "string") return "";
 
+  // Minimal cleaning - just basic whitespace normalization
   let text = raw
-    .replace(/<[^>]*>/g, " ")  // HTML/CSS
-    .replace(/\r?\n/g, " ")    // Line breaks
-    .replace(/\s+/g, " ")      // Whitespace
+    .replace(/<[^>]*>/g, " ")  // Remove HTML tags
+    .replace(/\r?\n+/g, " ")   // Convert newlines to spaces
+    .replace(/\s+/g, " ")      // Normalize whitespace
     .trim();
 
-  // Extract story (skip headers/footers) - but be more lenient
-  const startIdx = Math.max(text.search(/\*\*\* START OF/i), 0);
-  const endIdx = text.search(/\*\*\* END OF/i);
-  if (startIdx >= 0 && endIdx > startIdx) {
-    text = text.substring(startIdx, endIdx);
+  // Only remove obvious Gutenberg headers/footers if they exist
+  const startMatch = text.match(/\*\*\* START OF/i);
+  const endMatch = text.match(/\*\*\* END OF/i);
+  
+  if (startMatch && endMatch) {
+    // Extract content between START and END markers
+    const startIdx = text.indexOf(startMatch[0]) + 100; // Skip the marker itself
+    const endIdx = text.indexOf(endMatch[0]);
+    if (startIdx < endIdx) {
+      text = text.substring(startIdx, endIdx);
+    }
   }
 
-  // Remove only obvious junk patterns
-  const junkPatterns = [
-    /Project Gutenberg|www\.gutenberg\.org/gi,
-    /E?Book #\d+|Release Date:/gi,
-  ];
-  junkPatterns.forEach(p => text = text.replace(p, " "));
-
-  // Don't filter short words - keep all content
+  // Remove only the most obvious metadata
   text = text
-    .replace(/\s+/g, " ")
-    .slice(0, 30000) // Trim to safe size
-    .trim();
+    .replace(/Project Gutenberg.*?(\n|$)/gi, " ")
+    .replace(/www\.gutenberg\.org/gi, " ")
+    .replace(/\[Illustration.*?\]/gi, " ")
+    .replace(/\*\*\*.*?\*\*\*/g, " ");
 
-  return text;
+  // Final cleanup
+  return text.replace(/\s+/g, " ").slice(0, 30000).trim();
 }
 
 async function generateQuiz(userId, storyId, content, title = "the book", db = null, attempt = 0) {
