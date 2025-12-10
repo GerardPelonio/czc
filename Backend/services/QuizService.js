@@ -64,8 +64,8 @@ async function generateQuiz(userId, storyId, content, title = "the book", db = n
 
   let cleanText = cleanGutenbergContent(content);
 
-  // If provided content is too short, try fetching the Gutenberg source as a fallback
-  if (cleanText.length < 1200 && storyId && storyId.startsWith('GB')) {
+  // If provided content is short, pull Gutenberg text and merge to increase length
+  if (cleanText.length < 2000 && storyId && storyId.startsWith('GB')) {
     try {
       const gutenbergId = storyId.replace(/^GB/, '');
       const metaRes = await axios.get(`https://gutendex.com/books/${gutenbergId}`, { timeout: 6000 });
@@ -73,7 +73,9 @@ async function generateQuiz(userId, storyId, content, title = "the book", db = n
       const txtUrl = formats["text/plain; charset=utf-8"] || formats["text/plain"] || formats["text/html"];
       if (txtUrl) {
         const txtRes = await axios.get(txtUrl, { timeout: 10000 });
-        cleanText = cleanGutenbergContent(txtRes.data || cleanText);
+        const fetchedClean = cleanGutenbergContent(txtRes.data || "");
+        // Merge provided + fetched to maximize usable text
+        cleanText = `${cleanText} ${fetchedClean}`.slice(0, 30000).trim();
       }
     } catch (e) {
       console.warn(`[Quiz] Gutenberg fallback failed for ${storyId}:`, e?.message || e);
@@ -81,7 +83,7 @@ async function generateQuiz(userId, storyId, content, title = "the book", db = n
   }
 
   // Final guardrail: allow smaller excerpts but still require some substance
-  if (cleanText.length < 800) {
+  if (cleanText.length < 400) {
     const err = new Error("Not enough clean book content");
     err.status = 400;
     throw err;
