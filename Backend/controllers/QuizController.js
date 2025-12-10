@@ -83,26 +83,42 @@ async function generateQuiz(req, res) {
     // If provided content exists and looks valid, use it instead of fetching the whole book
     let content = '';
     let title = 'Unknown Title';
+    console.log(`[QuizController] Generating quiz for storyId: ${storyId}, providedContent length: ${providedContent?.length || 0}`);
+    
     if (providedContent && typeof providedContent === 'string' && providedContent.length >= 50) {
       content = providedContent;
+      console.log(`[QuizController] Using provided content (${content.length} chars)`);
       // try to fetch metadata (title) in the background but do not fail if it can't be fetched
       try {
         const metaRes = await axios.get(`https://gutendex.com/books/${gutenbergId}`, { timeout: 6000, httpsAgent: agent });
         title = metaRes.data.title || title;
       } catch (e) {
+        console.warn(`[QuizController] Could not fetch metadata for book ${gutenbergId}:`, e?.message);
         // ignore; we'll use Unknown Title if metadata can't be fetched
       }
     } else {
-      // Fetch metadata and content
-      const metaRes = await axios.get(`https://gutendex.com/books/${gutenbergId}`, { timeout: 6000, httpsAgent: agent });
-      title = metaRes.data.title || title;
-      const formats = metaRes.data.formats || {};
-      const txtUrl = formats["text/plain; charset=utf-8"] || formats["text/plain"] || formats["text/html"];
-      if (!txtUrl) return res.status(404).json({ success: false, message: "Story content not available" });
+      // Fetch metadata and content from Gutenberg
+      console.log(`[QuizController] Fetching from Gutenberg for bookId: ${gutenbergId}`);
+      try {
+        const metaRes = await axios.get(`https://gutendex.com/books/${gutenbergId}`, { timeout: 6000, httpsAgent: agent });
+        title = metaRes.data.title || title;
+        const formats = metaRes.data.formats || {};
+        const txtUrl = formats["text/plain; charset=utf-8"] || formats["text/plain"] || formats["text/html"];
+        if (!txtUrl) {
+          console.error(`[QuizController] No text format available for book ${gutenbergId}`);
+          return res.status(404).json({ success: false, message: "Story content not available" });
+        }
 
-      const txtRes = await axios.get(txtUrl, { timeout: 10000, httpsAgent: agent });
-      content = txtRes.data || "";
-      if (content.length < 50) return res.status(400).json({ success: false, message: "Story content too short" });
+        console.log(`[QuizController] Fetching text from: ${txtUrl}`);
+        const txtRes = await axios.get(txtUrl, { timeout: 10000, httpsAgent: agent });
+        content = txtRes.data || "";
+        console.log(`[QuizController] Fetched content length: ${content.length}`);
+        if (content.length < 50) return res.status(400).json({ success: false, message: "Story content too short" });
+      } catch (e) {
+        console.error(`[QuizController] Error fetching from Gutenberg:`, e?.message);
+        return res.status(503).json({ success: false, message: "Could not fetch story content from Gutenberg" });
+      }
+    }
     }
 
     // Generate quiz (service persists via save fallback)

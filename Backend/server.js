@@ -90,7 +90,12 @@ connectFirebase()
       }
     }
 
-    app.listen(PORT, () => console.log(`Server running on http://localhost:${PORT}`));
+    const server = app.listen(PORT, () => console.log(`Server running on http://localhost:${PORT}`));
+    
+    // Handle server errors
+    server.on('error', (err) => {
+      console.error('Server error:', err);
+    });
   })
   .catch(err => {
     console.error('Firebase initialization error:', err);
@@ -107,7 +112,23 @@ connectFirebase()
       console.warn('Payment expiry checker not started:', e.message || e);
     }
 
-    app.listen(PORT, () =>
+    const server = app.listen(PORT, () =>
       console.log(`Server running on http://localhost:${PORT} (Firestore NOT connected, using fallbacks)`)
     );
+    
+    // Handle server errors
+    server.on('error', (err) => {
+      console.error('Server error:', err);
+    });
   });
+
+// Handle uncaught exceptions
+process.on('uncaughtException', (err) => {
+  console.error('Uncaught Exception:', err);
+  process.exit(1);
+});
+
+// Handle unhandled promise rejections
+process.on('unhandledRejection', (reason, promise) => {
+  console.error('Unhandled Rejection at:', promise, 'reason:', reason);
+});
