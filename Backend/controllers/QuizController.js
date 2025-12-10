@@ -113,7 +113,8 @@ async function generateQuiz(req, res) {
   } catch (err) {
     console.error("Generate quiz error:", err?.message || sanitizeAxiosError(err));
     const status = err.status || 500;
-    return res.status(status).json({ success: false, message: err.message || "Failed to generate quiz" });
+    const message = err.message || "Failed to generate quiz";
+    return res.status(status).json({ success: false, message });
   }
 }
 

@@ -2,7 +2,14 @@ const { sanitizeAxiosError, maskApiKey } = require('../utils/logging');
 const axios = require('axios');
 const QuizModel = require('../models/QuizModel');
 const GEMINI_API_KEY = process.env.GEMINI_API_KEY;
-if (!GEMINI_API_KEY) console.warn('GEMINI_API_KEY is missing; AI calls will fail');
+
+// Log API key status at startup
+if (!GEMINI_API_KEY) {
+  console.error('❌ GEMINI_API_KEY is missing! Quiz generation will fail.');
+  console.error('Please set GEMINI_API_KEY in your .env file');
+} else {
+  console.log('✅ GEMINI_API_KEY found (length: ' + GEMINI_API_KEY.length + ')');
+}
 
 const GEMINI_URL = "https://generativelanguage.googleapis.com/v1/models/gemini-2.5-flash-lite:generateContent";
 
@@ -60,6 +67,13 @@ async function generateQuiz(userId, storyId, content, title = "the book", db = n
     throw new Error("Not enough clean book content");
   }
 
+  // Check if API key is configured
+  if (!GEMINI_API_KEY) {
+    const err = new Error('GEMINI_API_KEY not configured on server');
+    err.status = 500;
+    throw err;
+  }
+
   const prompt = `You are a literature teacher. Generate a 10-question quiz on "${title}":
 - 5 True/False questions
 - 5 Multiple-choice (A B C D options)
@@ -92,6 +106,7 @@ Return ONLY valid JSON (no extra text):
 }`;
 
   try {
+    console.log(`[Quiz] Calling Gemini API for ${storyId}...`);
     const res = await axios.post(
       `${GEMINI_URL}?key=${GEMINI_API_KEY}`,
       {
@@ -133,23 +148,36 @@ Return ONLY valid JSON (no extra text):
       console.warn('saveQuiz attempt failed:', e && e.message ? e.message : e);
     }
 
+    console.log(`[Quiz] ✅ Quiz generated successfully for ${storyId}`);
     return quiz;
 
   } catch (error) {
     const status = error?.response?.status;
     const code = error?.code || null;
+    const errorMsg = error?.response?.data?.error?.message || error?.message || 'Unknown error';
+    
+    console.error(`[Quiz] ❌ Gemini error (status=${status}, code=${code}): ${errorMsg}`);
+    
+    // Handle specific Gemini API errors
+    if (status === 403) {
+      // 403 usually means invalid API key or quota exceeded
+      const err = new Error('Quiz generation service returned 403 - API key may be invalid or quota exceeded');
+      err.status = 503; // Return 503 to client to indicate service unavailable
+      throw err;
+    }
+    
     const shouldRetryOn5xx = status >= 500 && status < 600 && attempt < 3;
     const shouldRetryOnNetwork = ['ECONNRESET', 'ECONNABORTED', 'ENOTFOUND', 'ERR_BAD_RESPONSE'].includes(code) && attempt < 3;
 
     if ((status === 429 || shouldRetryOn5xx || shouldRetryOnNetwork) && attempt < 3) {
       const delay = 3000 * Math.pow(2, attempt); // 3s,6s,12s
-      console.warn(`[warn] Gemini temporary error (status=${status || 'n/a'} code=${code || 'n/a'}). Attempt ${attempt + 1}/3; retrying in ${delay}ms`);
+      console.warn(`[Quiz] Retrying Gemini call (attempt ${attempt + 1}/3, waiting ${delay}ms)...`);
       await new Promise(r => setTimeout(r, delay));
       return generateQuiz(userId, storyId, content, title, db, attempt + 1);
     }
 
     const sanitized = sanitizeAxiosError(error);
-    console.error('Gemini call failed:', sanitized);
+    console.error('[Quiz] Final error:', sanitized);
     const ex = new Error('Quiz generation failed — try again later');
     ex.status = sanitized.status || 500;
     throw ex;
