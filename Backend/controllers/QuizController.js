@@ -119,7 +119,6 @@ async function generateQuiz(req, res) {
         return res.status(503).json({ success: false, message: "Could not fetch story content from Gutenberg" });
       }
     }
-    }
 
     // Generate quiz (service persists via save fallback)
       const quizData = await QuizService.generateQuiz(userId, storyId, content, title, db);
