@@ -40,7 +40,16 @@ app.set('trust proxy', 1);
 app.use(cors({
   origin: '*',
   methods: ['GET', 'POST', 'PUT', 'DELETE', 'OPTIONS'],
-  allowedHeaders: ['Content-Type', 'Authorization'],
+  // Include common headers browsers send on fetch so preflight passes
+  allowedHeaders: [
+    'Content-Type',
+    'Authorization',
+    'Expires',
+    'Cache-Control',
+    'Pragma',
+    'Accept',
+    'X-Requested-With'
+  ],
 }));
 
 app.use(morgan('dev'));
