@@ -74,7 +74,7 @@ async function generateQuiz(req, res) {
     // Check cached quiz
     const cached = await getQuizFallback(userId, storyId, db);
     const docId = _docId(userId, storyId);
-    if (cached) return res.status(200).json({ success: true, message: "Quiz loaded", data: { quizId: docId, storyId, type: cached.type, numQuestions: cached.numQuestions, questions: cached.questions.map(q => ({ question: q.question, choices: q.choices })) } });
+    if (cached) return res.status(200).json({ success: true, message: "Quiz loaded", data: { quizId: docId, storyId, type: cached.type, numQuestions: cached.numQuestions, questions: cached.questions.map(q => ({ question: q.question, type: q.type, choices: q.choices, correctAnswer: q.correctAnswer })) } });
 
     if (!storyId.startsWith("GB")) return res.status(400).json({ success: false, message: "Only GB storyId supported" });
 
@@ -108,7 +108,7 @@ async function generateQuiz(req, res) {
     // Generate quiz (service persists via save fallback)
       const quizData = await QuizService.generateQuiz(userId, storyId, content, title, db);
 
-    return res.status(200).json({ success: true, message: "Quiz generated successfully", data: { quizId: docId, storyId, type: quizData.type, numQuestions: quizData.numQuestions, questions: quizData.questions.map(q => ({ question: q.question, choices: q.choices })) } });
+    return res.status(200).json({ success: true, message: "Quiz generated successfully", data: { quizId: docId, storyId, type: quizData.type, numQuestions: quizData.numQuestions, questions: quizData.questions.map(q => ({ question: q.question, type: q.type, choices: q.choices, correctAnswer: q.correctAnswer })) } });
 
   } catch (err) {
     console.error("Generate quiz error:", err?.message || sanitizeAxiosError(err));
@@ -133,7 +133,7 @@ async function getQuiz(req, res) {
     if (!quiz) return res.status(404).json({ success: false, message: "Quiz not generated yet" });
     const docId = _docId(userId, storyId);
 
-    return res.status(200).json({ success: true, message: "Quiz fetched", data: { quizId: docId, storyId, type: quiz.type, numQuestions: quiz.numQuestions, questions: quiz.questions.map(q => ({ question: q.question, choices: q.choices })) } });
+    return res.status(200).json({ success: true, message: "Quiz fetched", data: { quizId: docId, storyId, type: quiz.type, numQuestions: quiz.numQuestions, questions: quiz.questions.map(q => ({ question: q.question, type: q.type, choices: q.choices, correctAnswer: q.correctAnswer })) } });
 
   } catch (err) {
     const status = err.status || 500;
