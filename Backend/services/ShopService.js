@@ -184,6 +184,7 @@ async function redeemItem(db, userId, itemId) {
 
       const FieldValue = getFieldValue();
       const newCoins = studentCoins - item.cost;
+      const itemName = item.name || itemId;
       
       // Update student document with unlocked item
       tx.update(studentRef, {
@@ -196,9 +197,9 @@ async function redeemItem(db, userId, itemId) {
       const transactionRecord = {
         userId: userId,
         itemId: itemId,
-        itemName: item.name,
-        cost: item.cost,
-        type: item.type || "boost",
+        itemName: itemName,
+        cost: item.cost || 0,
+        type: item.type || "power-up",
         rarity: item.rarity || "common",
         redeemedAt: FieldValue ? FieldValue.serverTimestamp() : serverTimestampOrDate(),
       };
@@ -207,9 +208,9 @@ async function redeemItem(db, userId, itemId) {
       return { 
         success: true, 
         itemId: itemId,
-        itemName: item.name,
+        itemName: itemName,
         coinsRemaining: newCoins,
-        message: `Successfully purchased ${item.name}! You have ${newCoins} coins remaining.`
+        message: `Successfully purchased ${itemName}! You have ${newCoins} coins remaining.`
       };
     });
   } catch (error) {
