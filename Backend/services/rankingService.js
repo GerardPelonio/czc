@@ -1,14 +1,19 @@
 const RANKS = ['Bronze', 'Silver', 'Gold', 'Amethyst', 'Diamond', 'Challenger'];
 const BOOKS_PER_SUBLEVEL = 10;
 const SUBLEVELS_PER_TIER = 5;
+const POINTS_PER_PROGRESS_UNIT = 5; // 5 quiz points = 1 progress unit (similar to 1 book)
 
-function computeRank(totalCompletedBooks = 0) {
-  const level = Math.floor(totalCompletedBooks / BOOKS_PER_SUBLEVEL);
+function computeRank(totalCompletedBooks = 0, totalPoints = 0) {
+  // Calculate progress: books count as full units, points count as partial units
+  const pointsProgress = Math.floor(totalPoints / POINTS_PER_PROGRESS_UNIT);
+  const totalProgress = totalCompletedBooks + pointsProgress;
+  
+  const level = Math.floor(totalProgress / BOOKS_PER_SUBLEVEL);
   const tierIndex = Math.min(Math.floor(level / SUBLEVELS_PER_TIER), RANKS.length - 1);
   const sublevel = Math.min((level % SUBLEVELS_PER_TIER) + 1, SUBLEVELS_PER_TIER);
   const currentRank = `${RANKS[tierIndex]} ${sublevel}`;
 
-  const progressInSublevel = totalCompletedBooks % BOOKS_PER_SUBLEVEL;
+  const progressInSublevel = totalProgress % BOOKS_PER_SUBLEVEL;
   const booksToNext = (tierIndex === RANKS.length - 1 && sublevel === SUBLEVELS_PER_TIER)
     ? 0
     : BOOKS_PER_SUBLEVEL - progressInSublevel;

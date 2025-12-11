@@ -7,12 +7,16 @@ exports.getRanking = async (req, res, next) => {
       typeof student.completedBooksCount === 'number'
         ? student.completedBooksCount
         : (student.completedBooks || []).length;
+    
+    // Get total points from quiz submissions (used for level progress)
+    const totalPoints = Number(student.points || 0);
 
-    const rankInfo = rankingService.computeRank(total);
+    const rankInfo = rankingService.computeRank(total, totalPoints);
     rankInfo.badge = rankingService.badgeForTier(rankInfo.tier);
 
     res.json({
       totalCompletedBooks: total,
+      totalPoints,
       ...rankInfo,
     });
   } catch (err) {

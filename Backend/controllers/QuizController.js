@@ -199,7 +199,12 @@ async function submitQuiz(req, res) {
     await saveQuizFallback(userId, storyId, { ...quiz, submitted: true, lastScore: score, lastAccuracy: accuracy, lastTime: timeTaken, lastBonus: bonus, results, submittedAt: new Date().toISOString() }, db);
 
     if (FieldValue) {
-      await db.collection("students").doc(userId).set({ coins: FieldValue.increment(coinsEarned), totalCoinsEarned: FieldValue.increment(coinsEarned), updatedAt: FieldValue.serverTimestamp() }, { merge: true });
+      await db.collection("students").doc(userId).set({ 
+        coins: FieldValue.increment(coinsEarned), 
+        totalCoinsEarned: FieldValue.increment(coinsEarned),
+        points: FieldValue.increment(totalPoints),
+        updatedAt: FieldValue.serverTimestamp() 
+      }, { merge: true });
     } else {
       // fallback: read student, update numerically
       try {
@@ -207,7 +212,13 @@ async function submitQuiz(req, res) {
         const studentData = studentSnap.exists ? studentSnap.data() : {};
         const currentCoins = Number(studentData.coins || 0);
         const currentTotal = Number(studentData.totalCoinsEarned || 0);
-        await db.collection('students').doc(userId).set({ coins: currentCoins + coinsEarned, totalCoinsEarned: currentTotal + coinsEarned, updatedAt: serverTimestampOrDate() }, { merge: true });
+        const currentPoints = Number(studentData.points || 0);
+        await db.collection('students').doc(userId).set({ 
+          coins: currentCoins + coinsEarned, 
+          totalCoinsEarned: currentTotal + coinsEarned,
+          points: currentPoints + totalPoints,
+          updatedAt: serverTimestampOrDate() 
+        }, { merge: true });
       } catch (e) {
         console.warn('submitQuiz: student update fallback failed', e && e.message ? e.message : e);
       }
