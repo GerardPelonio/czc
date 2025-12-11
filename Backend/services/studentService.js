@@ -37,14 +37,16 @@ async function createProfile(userId, data = {}) {
   const db = getDb();
   if (!db) throw new Error('Firestore not initialized (missing credentials or emulator).');
   
-  // Handle base64 avatar upload
+  // Handle base64 avatar upload - try storage first, fallback to base64
   if (data.avatarBase64) {
     try {
       const avatarUrl = await uploadBase64ToStorage(data.avatarBase64, userId);
       data.avatarUrl = avatarUrl;
       delete data.avatarBase64;
     } catch (error) {
-      console.error('Failed to upload avatar:', error);
+      console.error('Failed to upload avatar to storage, using base64:', error);
+      // Keep base64 as avatarUrl if storage upload fails
+      data.avatarUrl = data.avatarBase64;
       delete data.avatarBase64;
     }
   }
@@ -104,15 +106,16 @@ async function updateProfile(userId, data = {}) {
   const db = getDb();
   if (!db) throw new Error('Firestore not initialized (missing credentials or emulator).');
   
-  // Handle base64 avatar upload
+  // Handle base64 avatar upload - try storage first, fallback to base64
   if (data.avatarBase64) {
     try {
       const avatarUrl = await uploadBase64ToStorage(data.avatarBase64, userId);
       data.avatarUrl = avatarUrl;
       delete data.avatarBase64;
     } catch (error) {
-      console.error('Failed to upload avatar:', error);
-      // Continue without failing the entire update
+      console.error('Failed to upload avatar to storage, using base64:', error);
+      // Keep base64 as avatarUrl if storage upload fails
+      data.avatarUrl = data.avatarBase64;
       delete data.avatarBase64;
     }
   }
