@@ -53,7 +53,7 @@ exports.getRanking = async (req, res, next) => {
       });
     }
 
-    const rankInfo = rankingService.computeRank(total, totalPoints);
+    const rankInfo = rankingService.computeRank(total);
     rankInfo.badge = rankingService.badgeForTier(rankInfo.tier);
 
     // Save the computed rank to Firestore
