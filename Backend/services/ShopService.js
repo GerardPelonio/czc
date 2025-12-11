@@ -176,9 +176,10 @@ async function redeemItem(db, userId, itemId) {
         throw err(`Insufficient coins. You have ${studentCoins}, but this item costs ${item.cost}`, 400);
       }
 
-      // Check if already unlocked (for non-consumable items)
+      // Check if already unlocked (block only for non-consumables)
       const unlockedItems = student.unlockedItems || [];
-      if (item.type !== 'consumable' && unlockedItems.includes(itemId)) {
+      const isConsumable = item.type === 'consumable' || item.type === 'power-up';
+      if (!isConsumable && unlockedItems.includes(itemId)) {
         throw err("You already own this item", 400);
       }
 
@@ -187,9 +188,13 @@ async function redeemItem(db, userId, itemId) {
       const itemName = item.name || itemId;
       
       // Update student document with unlocked item
+      // For consumables, append to allow multiple copies; for non-consumables, keep set semantics
+      const nextUnlocked = Array.isArray(unlockedItems) ? [...unlockedItems, itemId] : [itemId];
       tx.update(studentRef, {
         coins: FieldValue ? FieldValue.increment(-item.cost) : newCoins,
-        unlockedItems: FieldValue ? FieldValue.arrayUnion(itemId) : (Array.isArray(unlockedItems) ? [...unlockedItems, itemId] : [itemId]),
+        unlockedItems: isConsumable
+          ? nextUnlocked
+          : (FieldValue ? FieldValue.arrayUnion(itemId) : (Array.isArray(unlockedItems) ? [...new Set([...unlockedItems, itemId])] : [itemId])),
         updatedAt: FieldValue ? FieldValue.serverTimestamp() : serverTimestampOrDate(),
       });
       

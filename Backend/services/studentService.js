@@ -188,15 +188,13 @@ async function consumePowerUp(userId, itemId) {
   const data = snap.data() || {};
   const unlockedItems = Array.isArray(data.unlockedItems) ? data.unlockedItems : [];
 
-  // Remove the first occurrence of itemId
-  const updatedUnlocked = unlockedItems.filter((id, idx) => !(id === itemId && unlockedItems.indexOf(id) === idx));
+  // Remove only one occurrence of itemId (preserve other copies)
+  const idx = unlockedItems.findIndex(id => id === itemId);
+  if (idx === -1) return data; // nothing to consume
+  const updatedUnlocked = [...unlockedItems];
+  updatedUnlocked.splice(idx, 1);
 
-  // Use arrayRemove when available for efficiency
-  if (firebase.firestore.FieldValue) {
-    await ref.set({ unlockedItems: firebase.firestore.FieldValue.arrayRemove(itemId) }, { merge: true });
-  } else {
-    await ref.set({ unlockedItems: updatedUnlocked }, { merge: true });
-  }
+  await ref.set({ unlockedItems: updatedUnlocked }, { merge: true });
 
   const updatedSnap = await ref.get();
   return updatedSnap.exists ? updatedSnap.data() : null;
