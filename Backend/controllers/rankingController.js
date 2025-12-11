@@ -33,6 +33,24 @@ exports.getRanking = async (req, res, next) => {
       0
     );
 
+    // Quick debug hook: return raw payload when debug=1
+    if (req.query && req.query.debug === '1') {
+      return res.json({
+        debug: true,
+        student: {
+          id: student.id,
+          completedBooksCount: student.completedBooksCount,
+          booksReadCount: student.booksReadCount,
+          completedBooksLen: Array.isArray(student.completedBooks) ? student.completedBooks.length : null,
+          booksReadLen: Array.isArray(student.booksRead) ? student.booksRead.length : null,
+          points: student.points,
+          totalPoints: student.totalPoints,
+          quizPoints: student.quizPoints,
+        },
+        totals: { totalCompletedBooks: total, totalPoints },
+      });
+    }
+
     const rankInfo = rankingService.computeRank(total, totalPoints);
     rankInfo.badge = rankingService.badgeForTier(rankInfo.tier);
 
