@@ -56,9 +56,13 @@ exports.getRanking = async (req, res, next) => {
     const rankInfo = rankingService.computeRank(total, totalPoints);
     rankInfo.badge = rankingService.badgeForTier(rankInfo.tier);
 
+    // Also return booksRead count (length of booksRead array)
+    const booksReadLength = Array.isArray(student.booksRead) ? student.booksRead.length : 0;
+
     res.json({
       totalCompletedBooks: total,
       totalPoints,
+      booksRead: booksReadLength,
       ...rankInfo,
     });
   } catch (err) {
