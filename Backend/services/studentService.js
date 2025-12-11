@@ -63,7 +63,6 @@ async function createProfile(userId, data = {}) {
     badges: data.badges || [],
     readingProgress: data.readingProgress || [],
     quizHistory: data.quizHistory || [],
-    achievements: data.achievements || [],
     customization: data.customization || {},
     avatarUrl: data.avatarUrl || '',
     unlockedItems: Array.isArray(data.unlockedItems) ? data.unlockedItems : [],

@@ -127,6 +127,15 @@ async function markBookFinished(req, res) {
     const rankInfo = rankingService.computeRank(total);
     rankInfo.badge = rankingService.badgeForTier(rankInfo.tier);
 
+    // Save the computed rank to Firestore
+    try {
+      await studentRef.update({
+        rank: rankInfo.currentRank
+      });
+    } catch (err) {
+      console.error('Failed to update rank in Firestore:', err);
+    }
+
     return res.status(200).json({
       success: true,
       message: 'Book marked finished',

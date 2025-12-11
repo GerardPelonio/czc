@@ -213,10 +213,18 @@ async function submitQuiz(req, res) {
         const currentCoins = Number(studentData.coins || 0);
         const currentTotal = Number(studentData.totalCoinsEarned || 0);
         const currentPoints = Number(studentData.points || 0);
+        
+        // Compute new rank based on updated points and books
+        const rankingService = require('../services/rankingService');
+        const totalCompletedBooks = studentData.completedBooksCount || (Array.isArray(studentData.completedBooks) ? studentData.completedBooks.length : 0);
+        const newTotalPoints = currentPoints + totalPoints;
+        const rankInfo = rankingService.computeRank(totalCompletedBooks, newTotalPoints);
+        
         await db.collection('students').doc(userId).set({ 
           coins: currentCoins + coinsEarned, 
           totalCoinsEarned: currentTotal + coinsEarned,
           points: currentPoints + totalPoints,
+          rank: rankInfo.currentRank,
           updatedAt: serverTimestampOrDate() 
         }, { merge: true });
       } catch (e) {

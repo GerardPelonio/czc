@@ -56,6 +56,18 @@ exports.getRanking = async (req, res, next) => {
     const rankInfo = rankingService.computeRank(total, totalPoints);
     rankInfo.badge = rankingService.badgeForTier(rankInfo.tier);
 
+    // Save the computed rank to Firestore
+    try {
+      const db = req.app?.locals?.db;
+      if (db && req.student?.id) {
+        await db.collection('students').doc(req.student.id).update({
+          rank: rankInfo.currentRank
+        });
+      }
+    } catch (err) {
+      console.error('Failed to update rank in Firestore:', err);
+    }
+
     // Use booksReadInCurrentRank from rankInfo (0-9 books in current sublevel)
     // This automatically resets to 0 when user ranks up
     const booksReadDisplay = rankInfo.booksReadInCurrentRank || 0;

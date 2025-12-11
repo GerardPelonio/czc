@@ -95,7 +95,7 @@ async function recordReadingSession(userId, sessionIso) {
   }
   console.log(`[recordReadingSession] Consecutive check: ${checkDays.join(', ')} → streak=${consecutiveDays}`);
 
-  // Track longest streak for badges/achievements
+  // Track longest streak for badges
   let longest = data.longestStreak || 0;
   const badges = Array.isArray(data.badges) ? data.badges.slice() : [];
 
