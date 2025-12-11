@@ -29,6 +29,10 @@ function computeRank(totalCompletedBooks = 0, totalPoints = 0) {
     nextRank = `${RANKS[nextTier]} ${nextSub}`;
   }
 
+  // Calculate booksRead within current sublevel (0-9, resets to 0 on rank up)
+  // This is the display value showing progress toward next rank
+  const booksReadInCurrentRank = progressInSublevel;
+
   return {
     currentRank,
     tier: RANKS[tierIndex],
@@ -36,6 +40,7 @@ function computeRank(totalCompletedBooks = 0, totalPoints = 0) {
     progressInSublevel,
     booksToNext,
     nextRank,
+    booksReadInCurrentRank, // 0-9 books read in current sublevel (resets when ranking up)
   };
 }
 
