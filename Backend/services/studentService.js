@@ -209,4 +209,32 @@ async function getBookmarks(userId) {
   return snap.data().bookmarks || [];
 }
 
-module.exports = { createProfile, getProfile, getAllProfiles, updateProfile, deleteProfile, addBookmark, removeBookmark, getBookmarks, consumePowerUp };
+async function addBookToRead(userId, bookId) {
+  if (!userId || !bookId) throw new Error('userId and bookId are required');
+  const db = getDb();
+  if (!db) throw new Error('Firestore not initialized (missing credentials or emulator).');
+  const ref = db.collection(COLLECTION).doc(userId);
+  
+  // Check if document exists and if book is already in booksRead
+  const snap = await ref.get();
+  if (!snap.exists) {
+    throw new Error('Student profile not found');
+  }
+  
+  const booksRead = Array.isArray(snap.data().booksRead) ? snap.data().booksRead : [];
+  
+  // Prevent duplicates
+  if (booksRead.includes(bookId)) {
+    return booksRead; // Already added, return existing array
+  }
+  
+  // Add book to booksRead array
+  await ref.set({
+    booksRead: firebase.firestore.FieldValue.arrayUnion(bookId)
+  }, { merge: true });
+  
+  const updatedSnap = await ref.get();
+  return updatedSnap.exists ? (updatedSnap.data().booksRead || []) : [];
+}
+
+module.exports = { createProfile, getProfile, getAllProfiles, updateProfile, deleteProfile, addBookmark, removeBookmark, getBookmarks, consumePowerUp, addBookToRead };

@@ -103,19 +103,19 @@ async function markBookFinished(req, res) {
     const { bookId, title } = req.body || {};
     if (!bookId || typeof bookId !== 'string') return res.status(400).json({ success: false, message: 'bookId is required' });
 
-    
-    if (typeof studentService.markBookFinished === 'function') {
-      await studentService.markBookFinished(uid, { bookId, title });
+    // Add book to booksRead array (with duplicate prevention)
+    if (typeof studentService.addBookToRead === 'function') {
+      await studentService.addBookToRead(uid, bookId);
     }
 
-    // single-line ranking update (transactional, deduplicating) - minimal, secure, non-fatal
+    // Add to completed books with ranking update (transactional, deduplicating) - minimal, secure, non-fatal
     try {
       await rankingService.addCompletedBook(db, uid, { bookId, title });
     } catch (err) {
       console.error('ranking update failed:', err);
     }
 
-    // Updated rank/progress
+    // Get updated student profile
     const studentRef = db.collection('students').doc(uid);
     const snap = await studentRef.get();
     const student = snap.exists ? snap.data() : {};
