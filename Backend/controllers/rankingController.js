@@ -16,14 +16,16 @@ exports.getRanking = async (req, res, next) => {
       quizPoints: student.quizPoints,
     });
 
-    // Books completed: prefer the fast counter, fall back to arrays or legacy fields
-    const total =
-      typeof student.completedBooksCount === 'number'
-        ? student.completedBooksCount
-        : typeof student.booksReadCount === 'number'
-          ? student.booksReadCount
-          : (Array.isArray(student.completedBooks) ? student.completedBooks.length : 0) ||
-            (Array.isArray(student.booksRead) ? student.booksRead.length : 0);
+    // Books completed: prefer counters when they are positive, otherwise use array lengths
+    const counterValues = [student.completedBooksCount, student.booksReadCount]
+      .filter((n) => typeof n === 'number' && n >= 0);
+    const counterMax = counterValues.length ? Math.max(...counterValues) : -1;
+
+    const arrayCompletedLen = Array.isArray(student.completedBooks) ? student.completedBooks.length : 0;
+    const arrayReadLen = Array.isArray(student.booksRead) ? student.booksRead.length : 0;
+    const arrayMax = Math.max(arrayCompletedLen, arrayReadLen);
+
+    const total = counterMax > 0 ? counterMax : arrayMax;
     
     // Quiz / challenge points: handle possible legacy fields
     const totalPoints = Number(
