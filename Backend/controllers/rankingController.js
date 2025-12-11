@@ -56,13 +56,21 @@ exports.getRanking = async (req, res, next) => {
     const rankInfo = rankingService.computeRank(total, totalPoints);
     rankInfo.badge = rankingService.badgeForTier(rankInfo.tier);
 
-    // Also return booksRead count (length of booksRead array)
-    const booksReadLength = Array.isArray(student.booksRead) ? student.booksRead.length : 0;
+    // Calculate booksRead for display (0-9 within current tier)
+    // total is cumulative books across all tiers
+    // We need to find: how many books in the current tier?
+    const rankOrder = ["Bronze", "Silver", "Gold", "Diamond", "Amethyst", "Challenger"];
+    const tierIndex = rankOrder.indexOf(rankInfo.tier);
+    const totalBooksForCurrentTier = (tierIndex * 5 + (5 - rankInfo.sublevel)) * 10;
+    const booksInCurrentTier = Math.min(total - totalBooksForCurrentTier, 10);
+    
+    // If books hit 10 in tier, show 10 (let frontend decide to show as 10/10 or 0/10)
+    let booksReadDisplay = Math.max(0, booksInCurrentTier);
 
     res.json({
       totalCompletedBooks: total,
       totalPoints,
-      booksRead: booksReadLength,
+      booksRead: booksReadDisplay,
       ...rankInfo,
     });
   } catch (err) {
