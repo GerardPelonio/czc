@@ -4,6 +4,18 @@ exports.getRanking = async (req, res, next) => {
   try {
     const student = req.student || {};
 
+    // TEMP debug: log student snapshot to trace missing fields
+    console.log('[ranking] student payload', {
+      id: student.id,
+      completedBooksCount: student.completedBooksCount,
+      booksReadCount: student.booksReadCount,
+      completedBooksLen: Array.isArray(student.completedBooks) ? student.completedBooks.length : 'n/a',
+      booksReadLen: Array.isArray(student.booksRead) ? student.booksRead.length : 'n/a',
+      points: student.points,
+      totalPoints: student.totalPoints,
+      quizPoints: student.quizPoints,
+    });
+
     // Books completed: prefer the fast counter, fall back to arrays or legacy fields
     const total =
       typeof student.completedBooksCount === 'number'
