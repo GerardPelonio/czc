@@ -16,19 +16,30 @@ function getDb() {
         try {
           if (hasServiceAccountJson) {
             const serviceAccount = JSON.parse(process.env.FIREBASE_SERVICE_ACCOUNT_JSON);
-            firebase.initializeApp({ credential: firebase.credential.cert(serviceAccount) });
+            firebase.initializeApp({ 
+              credential: firebase.credential.cert(serviceAccount),
+              storageBucket: process.env.FIREBASE_STORAGE_BUCKET || `${serviceAccount.project_id}.appspot.com`
+            });
           } else if (hasExplicitCreds) {
             const serviceAccount = {
               projectId: process.env.FIREBASE_PROJECT_ID,
               clientEmail: process.env.FIREBASE_CLIENT_EMAIL,
               privateKey: process.env.FIREBASE_PRIVATE_KEY.replace(/\\n/g, '\n'),
             };
-            firebase.initializeApp({ credential: firebase.credential.cert(serviceAccount) });
+            firebase.initializeApp({ 
+              credential: firebase.credential.cert(serviceAccount),
+              storageBucket: process.env.FIREBASE_STORAGE_BUCKET || `${process.env.FIREBASE_PROJECT_ID}.appspot.com`
+            });
           } else if (hasEmulator) {
             const projectId = process.env.FIREBASE_PROJECT_ID || process.env.GCLOUD_PROJECT || 'demo-project';
-            firebase.initializeApp({ projectId });
+            firebase.initializeApp({ 
+              projectId,
+              storageBucket: process.env.FIREBASE_STORAGE_BUCKET || `${projectId}.appspot.com`
+            });
           } else if (hasADC) {
-            firebase.initializeApp();
+            firebase.initializeApp({
+              storageBucket: process.env.FIREBASE_STORAGE_BUCKET
+            });
           }
         } catch (e) {
           console.warn('getDb: failed to initialize firebase from env vars; continuing with null db', e && e.message ? e.message : e);
