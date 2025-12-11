@@ -11,6 +11,9 @@ router.get('/api/student/profile/:id', verifyToken, requireRole('student'), cont
 router.patch('/api/student/profile/:id', verifyToken, requireRole('student'), createOrUpdateProfile, controller.updateProfile);
 router.delete('/api/student/profile/:id', verifyToken, requireRole('student'), controller.deleteProfile);
 
+// Consume a power-up (remove one from unlockedItems)
+router.post('/api/student/powerups/consume', verifyToken, requireRole('student'), controller.consumePowerUp);
+
 // Mark book as finished
 router.post('/api/student/finish-book', verifyToken, requireRole('student'), controller.markBookFinished);
 

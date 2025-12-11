@@ -184,6 +184,22 @@ async function getBookmarks(req, res) {
   }
 }
 
+async function consumePowerUp(req, res) {
+  try {
+    const userId = req.user && req.user.id;
+    const { itemId } = req.body || {};
+
+    if (!userId) return res.status(401).json({ success: false, message: 'Unauthorized' });
+    if (!itemId) return res.status(400).json({ success: false, message: 'itemId is required' });
+
+    const profile = await studentService.consumePowerUp(userId, itemId);
+    return res.status(200).json({ success: true, message: 'Power-up consumed', data: { profile } });
+  } catch (error) {
+    const status = error.status || 500;
+    return res.status(status).json({ success: false, message: error.message || 'Internal server error' });
+  }
+}
+
 module.exports = {
   createProfile,
   getAllProfiles,
@@ -193,5 +209,6 @@ module.exports = {
   markBookFinished,
   addBookmark,
   removeBookmark,
-  getBookmarks
+  getBookmarks,
+  consumePowerUp
 };

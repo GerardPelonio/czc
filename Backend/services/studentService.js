@@ -176,6 +176,32 @@ async function removeBookmark(userId, storyId) {
   return updatedSnap.exists ? (updatedSnap.data().bookmarks || []) : [];
 }
 
+async function consumePowerUp(userId, itemId) {
+  if (!userId || !itemId) throw new Error('userId and itemId are required');
+  const db = getDb();
+  if (!db) throw new Error('Firestore not initialized (missing credentials or emulator).');
+
+  const ref = db.collection(COLLECTION).doc(userId);
+  const snap = await ref.get();
+  if (!snap.exists) throw new Error('Student profile not found');
+
+  const data = snap.data() || {};
+  const unlockedItems = Array.isArray(data.unlockedItems) ? data.unlockedItems : [];
+
+  // Remove the first occurrence of itemId
+  const updatedUnlocked = unlockedItems.filter((id, idx) => !(id === itemId && unlockedItems.indexOf(id) === idx));
+
+  // Use arrayRemove when available for efficiency
+  if (firebase.firestore.FieldValue) {
+    await ref.set({ unlockedItems: firebase.firestore.FieldValue.arrayRemove(itemId) }, { merge: true });
+  } else {
+    await ref.set({ unlockedItems: updatedUnlocked }, { merge: true });
+  }
+
+  const updatedSnap = await ref.get();
+  return updatedSnap.exists ? updatedSnap.data() : null;
+}
+
 async function getBookmarks(userId) {
   if (!userId) throw new Error('userId is required');
   const db = getDb();
@@ -185,4 +211,4 @@ async function getBookmarks(userId) {
   return snap.data().bookmarks || [];
 }
 
-module.exports = { createProfile, getProfile, getAllProfiles, updateProfile, deleteProfile, addBookmark, removeBookmark, getBookmarks };
+module.exports = { createProfile, getProfile, getAllProfiles, updateProfile, deleteProfile, addBookmark, removeBookmark, getBookmarks, consumePowerUp };
