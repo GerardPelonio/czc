@@ -3,7 +3,7 @@ const loadStudent = async (req, res, next) => {
     const db = req.app.locals.db;
     if (!db) return res.status(500).json({ message: 'Database not initialized' });
     
-    const uid = req.user?.uid || req.user?.id;
+    const uid = req.user?.uid || req.user?.id || req.user?.userId;
     if (!uid) return res.status(401).json({ message: 'Unauthorized' });
 
     const docRef = db.collection('students').doc(uid);
