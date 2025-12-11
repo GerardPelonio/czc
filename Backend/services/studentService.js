@@ -5,9 +5,50 @@ const { COLLECTION } = require('../models/studentModel');
 // Show available customization items
 const AVAILABLE_CUSTOM_ITEMS = ['hat_basic','hat_star','bg_forest','bg_space'];
 
+async function uploadBase64ToStorage(base64Data, userId) {
+  try {
+    const bucket = firebase.storage().bucket();
+    const matches = base64Data.match(/^data:([A-Za-z-+\/]+);base64,(.+)$/);
+    if (!matches || matches.length !== 3) {
+      throw new Error('Invalid base64 string');
+    }
+    
+    const contentType = matches[1];
+    const base64Image = matches[2];
+    const buffer = Buffer.from(base64Image, 'base64');
+    
+    const fileName = `avatars/${userId}_${Date.now()}.jpg`;
+    const file = bucket.file(fileName);
+    
+    await file.save(buffer, {
+      metadata: { contentType },
+      public: true
+    });
+    
+    const publicUrl = `https://storage.googleapis.com/${bucket.name}/${fileName}`;
+    return publicUrl;
+  } catch (error) {
+    console.error('Error uploading to storage:', error);
+    throw error;
+  }
+}
+
 async function createProfile(userId, data = {}) {
   const db = getDb();
   if (!db) throw new Error('Firestore not initialized (missing credentials or emulator).');
+  
+  // Handle base64 avatar upload
+  if (data.avatarBase64) {
+    try {
+      const avatarUrl = await uploadBase64ToStorage(data.avatarBase64, userId);
+      data.avatarUrl = avatarUrl;
+      delete data.avatarBase64;
+    } catch (error) {
+      console.error('Failed to upload avatar:', error);
+      delete data.avatarBase64;
+    }
+  }
+  
   const ref = db.collection(COLLECTION).doc(userId);
   const payload = {
     studentId: userId,
@@ -62,6 +103,20 @@ async function updateProfile(userId, data = {}) {
   if (!userId) throw new Error('Missing userId');
   const db = getDb();
   if (!db) throw new Error('Firestore not initialized (missing credentials or emulator).');
+  
+  // Handle base64 avatar upload
+  if (data.avatarBase64) {
+    try {
+      const avatarUrl = await uploadBase64ToStorage(data.avatarBase64, userId);
+      data.avatarUrl = avatarUrl;
+      delete data.avatarBase64;
+    } catch (error) {
+      console.error('Failed to upload avatar:', error);
+      // Continue without failing the entire update
+      delete data.avatarBase64;
+    }
+  }
+  
   const ref = db.collection(COLLECTION).doc(userId);
   await ref.set(data, { merge: true }); 
   const snap = await ref.get();
