@@ -7,6 +7,7 @@ const studentSchema = {
   grade_level: { type: 'string' },
   age: {type: 'number'},
   avatarUrl: { type: 'string' },
+  avatarBase64: { type: 'string' },
   customization: { type: 'object' },
   unlockedItems: { type: 'array' },
   rank: { type: 'string' },
