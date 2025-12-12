@@ -1,11 +1,6 @@
-// Backend/services/QuestService.js
-
 const QuestModel = require('../models/QuestModel');
 const { addCoinsToUser } = require('./userService'); 
 
-/**
- * Fetch all quests from Firestore
- */
 async function getQuestsFromFirestore(db) {
     try {
         const questsRef = db.collection('quests');
@@ -15,7 +10,6 @@ async function getQuestsFromFirestore(db) {
         snapshot.forEach(doc => {
             const data = doc.data();
             const target = Number(data.target) || 1; // Ensure it's always a number
-            // Try multiple field names for reward
             const reward = Number(data.rewardCoins || data.reward || data.coins || 0);
             quests.push({
                 id: doc.id,
@@ -27,19 +21,8 @@ async function getQuestsFromFirestore(db) {
                 trigger: data.trigger,
                 order: data.order
             });
-            console.log(`Quest ${doc.id}:`, {
-                title: data.title,
-                target: target,
-                reward: reward,
-                allFields: Object.keys(data),
-                rewardCoinsField: data.rewardCoins,
-                rewardField: data.reward,
-                coinsField: data.coins,
-                trigger: data.trigger
-            });
         });
         
-        // Sort by order
         quests.sort((a, b) => (a.order || 0) - (b.order || 0));
         
         return quests;
@@ -109,9 +92,6 @@ async function getQuestsWithProgress(db, userId) {
 async function claimQuestReward(db, userId, questId) {
     // Fetch all quests from Firestore
     const quests = await getQuestsFromFirestore(db);
-    console.log("Available quest IDs:", quests.map(q => q.id));
-    console.log("Looking for questId:", questId, "Type:", typeof questId);
-    
     const quest = quests.find(q => q.id === questId);
     
     if (!quest) {

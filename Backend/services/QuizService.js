@@ -7,8 +7,6 @@ const GEMINI_API_KEY = process.env.GEMINI_API_KEY;
 if (!GEMINI_API_KEY) {
   console.error('❌ GEMINI_API_KEY is missing! Quiz generation will fail.');
   console.error('Please set GEMINI_API_KEY in your .env file');
-} else {
-  console.log('✅ GEMINI_API_KEY found (length: ' + GEMINI_API_KEY.length + ')');
 }
 
 const GEMINI_URL = "https://generativelanguage.googleapis.com/v1/models/gemini-2.5-flash-lite:generateContent";
@@ -129,10 +127,6 @@ Return ONLY valid JSON (no extra text):
 }`;
 
   try {
-    console.log(`[Quiz] Calling Gemini API for ${storyId}...`);
-    console.log(`[Quiz] Using model: gemini-2.5-flash-lite`);
-    console.log(`[Quiz] API endpoint: ${GEMINI_URL}`);
-    
     const res = await axios.post(
       `${GEMINI_URL}?key=${GEMINI_API_KEY}`,
       {
@@ -174,7 +168,6 @@ Return ONLY valid JSON (no extra text):
       console.warn('saveQuiz attempt failed:', e && e.message ? e.message : e);
     }
 
-    console.log(`[Quiz] ✅ Quiz generated successfully for ${storyId}`);
     return quiz;
 
   } catch (error) {

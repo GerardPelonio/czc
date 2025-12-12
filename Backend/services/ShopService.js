@@ -1,5 +1,3 @@
-// Backend/services/ShopService.js - FULLY FIRESTORE INTEGRATED
-
 const admin = require("firebase-admin");
 const { getDb, getFieldValue, serverTimestampOrDate } = require('../utils/getDb');
 const shopItemsData = require("../data/shopItems.json");
@@ -14,9 +12,6 @@ const err = (msg, status = 400) => {
   throw e;
 };
 
-/**
- * List all available shop items with pagination.
- */
 async function listItems(db, { page = 1, limit = 20 }) {
   if (!db) throw err('Database not initialized', 503);
   
@@ -48,7 +43,6 @@ async function listItems(db, { page = 1, limit = 20 }) {
 
     // If no items in Firestore, fallback to JSON data
     if (items.length === 0) {
-      console.log("No items in Firestore, using fallback JSON data");
       const start = offset;
       const end = start + limit;
       items = shopItemsData
@@ -165,7 +159,6 @@ async function redeemItem(db, userId, itemId) {
       if (!item) {
         item = shopItemsData.find(i => i.id === itemId);
         if (!item) throw err("Shop item not found", 404);
-        console.log(`Using fallback item data for ${itemId} from JSON`);
       }
 
       const student = studentSnap.data();

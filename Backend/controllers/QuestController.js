@@ -231,10 +231,6 @@ async function updateQuestProgress(req, res) {
             return res.json({ success: true, message: "No quests triggered by this event" });
         }
 
-        // NOTE: Progress is now calculated dynamically from student data (booksRead array length)
-        // in QuestModel.getUserQuestProgress(), so we don't manually increment here.
-        // We only need to update the book in the student's booksRead array (done above)
-
         return res.json({
             success: true,
             message: `Progress updated for ${matchingQuests.length} quest(s)`,

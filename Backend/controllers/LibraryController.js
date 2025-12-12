@@ -2,10 +2,6 @@ const axios = require("axios");
 const fs = require('fs');
 const path = require('path');
 
-// ============================================
-// CONFIGURATION
-// ============================================
-// INCREASED MIN_WORDS to 3200 to filter out more borderline short texts
 const MIN_WORDS = 3200;     
 const MAX_WORDS = 4200;
 const WORDS_PER_PAGE = 250;
@@ -27,9 +23,7 @@ const IS_SERVERLESS = !!process.env.VERCEL || process.env.SERVERLESS || process.
 
 let perfectBooks = [];
 
-// ============================================
-// CACHE
-// ============================================
+
 function loadCache() {
   const candidates = [
     CACHE_FILE,
@@ -63,9 +57,7 @@ function saveCache(books) {
   }
 }
 
-// ============================================
-// SUPER STRICT CONTENT FILTER (THIS IS THE KEY)
-// ============================================
+
 async function processBookContent(textUrl, bookTitle) {
   try {
     const response = await axios.get(textUrl, {
@@ -103,7 +95,7 @@ async function processBookContent(textUrl, bookTitle) {
     }
 
     text = text.slice(startIdx, endIdx).trim();
-    if (text.length < 12000) return { valid: false }; // Too short after cleanup
+    if (text.length < 12000) return { valid: false }; 
 
     const lowerText = text.toLowerCase();
     const first5k = lowerText.slice(0, 5000);
@@ -115,7 +107,7 @@ async function processBookContent(textUrl, bookTitle) {
       /transcriber['’?]?s note/i,
       /errata/i,
       /table of contents.{20,}/i,
-      /chapter\s+(?:xx|x{4,}|[ivxlcdm]{5,})/i,  // Too many chapters or high Roman numerals
+      /chapter\s+(?:xx|x{4,}|[ivxlcdm]{5,})/i,  
       /bibliography/i,
       /appendix/i,
       /glossary/i,
@@ -131,8 +123,6 @@ async function processBookContent(textUrl, bookTitle) {
       return { valid: false };
     }
 
-    // === CLEAN TEXT FOR ANALYSIS ===
-    // Use a simpler clean up for word counting
     const cleanText = text
       .replace(/[\r\n]+/g, ' ')
       .replace(/\s{2,}/g, ' ')
@@ -186,9 +176,6 @@ async function processBookContent(textUrl, bookTitle) {
   }
 }
 
-// ============================================
-// FETCH CANDIDATES
-// ============================================
 async function loadRawBooks() {
   const urls = [
     "https://gutendex.com/books?languages=en&topic=short%20stories&sort=popular",

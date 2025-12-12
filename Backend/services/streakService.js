@@ -60,7 +60,6 @@ async function getStreak(userId) {
 async function recordReadingSession(userId, sessionIso) {
   if (!userId) throw Object.assign(new Error('Missing userId'), { status: 400 });
   const dateKey = sessionIso ? toDateKey(new Date(sessionIso)) : toDateKey();
-  console.log(`[recordReadingSession] userId: ${userId}, sessionIso: ${sessionIso}, computed dateKey: ${dateKey}`);
   
   const ref = await getRef(userId);
   const snap = await ref.get();
@@ -68,11 +67,9 @@ async function recordReadingSession(userId, sessionIso) {
 
   // Initialize or get existing daily activity map
   const activeDays = data.activeDays || {};
-  console.log(`[recordReadingSession] Current activeDays before update:`, Object.keys(activeDays));
   
   // Mark this date as active
   activeDays[dateKey] = true;
-  console.log(`[recordReadingSession] Marked ${dateKey} as active. activeDays after update:`, Object.keys(activeDays));
 
   // Calculate consecutive days from the daily activity map
   // Start from today in UTC
@@ -82,10 +79,8 @@ async function recordReadingSession(userId, sessionIso) {
     new Date().getUTCDate()
   ));
   let consecutiveDays = 0;
-  let checkDays = [];
   while (true) {
     const key = toDateKey(current);
-    checkDays.push(`${key}=${activeDays[key] ? 'Y' : 'N'}`);
     if (activeDays[key]) {
       consecutiveDays++;
       current.setUTCDate(current.getUTCDate() - 1);
@@ -93,7 +88,6 @@ async function recordReadingSession(userId, sessionIso) {
       break;
     }
   }
-  console.log(`[recordReadingSession] Consecutive check: ${checkDays.join(', ')} → streak=${consecutiveDays}`);
 
   // Track longest streak for badges
   let longest = data.longestStreak || 0;

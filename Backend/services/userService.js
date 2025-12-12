@@ -48,15 +48,10 @@ async function registerUser({ username, email, password, id, role }) {
 
   const users = db.collection(COLLECTION);
 
-  // Check for existing email and username
+  // Check for existing email only
   if (!email) throw err('Email is required', 400);
   const existingEmail = await users.where('email', '==', email).limit(1).get();
   if (!existingEmail.empty) throw err('Email already exists', 409);
-
-  if (username) {
-    const existingUser = await users.where('username', '==', username).limit(1).get();
-    if (!existingUser.empty) throw err('Username already exists', 409);
-  }
 
   const salt = await bcrypt.genSalt(10);
   const hashed = await bcrypt.hash(password, salt);
@@ -161,25 +156,13 @@ async function addCoinsToUser(db, userId, amount) {
     const studentRef = db.collection('students').doc(userId);
     const snap = await studentRef.get();
     
-    console.log(`Adding coins: userId=${userId}, amount=${amount}`);
-    console.log(`Student doc exists: ${snap.exists}`);
-    
-    if (snap.exists) {
-      console.log(`Student data before update:`, snap.data());
-    }
-    
     const currentCoins = snap.exists ? (snap.data().coins || 0) : 0;
     const newBalance = currentCoins + amount;
-
-    console.log(`Current coins: ${currentCoins}, New balance: ${newBalance}`);
     
     // Use set with merge to ensure document exists and coins are updated
     await studentRef.set({ coins: newBalance }, { merge: true });
     
     // Verify the update
-    const verifySnap = await studentRef.get();
-    console.log(`Verified coins after update: ${verifySnap.data().coins}`);
-    
     return newBalance;
   } catch (error) {
     console.error(`Error adding coins to user ${userId}:`, error);
