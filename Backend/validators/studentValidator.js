@@ -1,8 +1,5 @@
 const { body, validationResult } = require('express-validator');
 
-const MAX_AVATAR_BYTES = 1 * 1024 * 1024; // 1MB
-const DATA_URI_RE = /^data:(image\/(png|jpeg|jpg|webp));base64,([A-Za-z0-9+/=]+)$/i;
-
 const createOrUpdateProfile = [
   body('displayName').optional().isString().trim().notEmpty(),
   body('grade_level').optional().isString().trim(),
@@ -11,7 +8,7 @@ const createOrUpdateProfile = [
   body('classes.*').optional().isString().trim(),
   body('booksRead').optional().isArray(),
   body('booksRead.*').optional().isString().trim(),
-  body('avatarUrl').optional().isURL().withMessage('avatarUrl must be a valid URL'),
+  body('avatarUrl').optional().isString().trim(),
   body('customization').optional().isObject(),
   body('unlockedItems').optional().isArray(),
   body('unlockedItems.*').optional().isString().trim(),
