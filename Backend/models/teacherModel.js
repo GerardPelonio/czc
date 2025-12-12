@@ -7,7 +7,6 @@ const teacherSchema = {
   subject: { type: 'string' },
   customization: { type: 'object' },
   avatarUrl: { type: 'string' },
-  avatarBase64: { type: 'string' },
   assignedStudents: { type: 'array' }
 };
 

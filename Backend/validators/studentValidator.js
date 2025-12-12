@@ -12,15 +12,6 @@ const createOrUpdateProfile = [
   body('booksRead').optional().isArray(),
   body('booksRead.*').optional().isString().trim(),
   body('avatarUrl').optional().isURL().withMessage('avatarUrl must be a valid URL'),
-  body('avatarBase64').optional().custom(value => {
-    if (typeof value !== 'string') throw new Error('avatarBase64 must be a string');
-    const m = value.match(DATA_URI_RE);
-    if (!m) throw new Error('avatarBase64 must be a valid data type (image/png|jpeg|jpg|webp)');
-    const b64 = m[3];
-    const approxBytes = Math.ceil(b64.length * 3 / 4);
-    if (approxBytes > MAX_AVATAR_BYTES) throw new Error('avatar image too large (max 1MB)');
-    return true;
-  }),
   body('customization').optional().isObject(),
   body('unlockedItems').optional().isArray(),
   body('unlockedItems.*').optional().isString().trim(),

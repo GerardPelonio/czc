@@ -28,7 +28,6 @@ async function createProfile(userId, data = {}) {
     username: data.username || '',
     customization: data.customization || {},
     avatarUrl: data.avatarUrl || '',
-    avatarBase64: data.avatarBase64 || '',
     assignedStudents: Array.isArray(data.assignedStudents) ? data.assignedStudents : []
   };
 
